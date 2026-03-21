@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "Vision Identifier",
-    "slug": "vision-identifier",
+    "name": "VinylSnap",
+    "slug": "vinylsnap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "visionidentifier",
+    "scheme": "vinylsnap",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.visionidentifier.app",
+      "bundleIdentifier": "com.vinylsnap.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses your camera to identify and analyze items."
+        "NSCameraUsageDescription": "This app uses your camera to identify and value vinyl records."
       }
     },
     "android": {
-      "package": "com.visionidentifier.app",
+      "package": "com.vinylsnap.app",
       "permissions": ["CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -35,7 +35,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to identify and analyze items."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to identify and value vinyl records."
         }
       ],
       "expo-router",
