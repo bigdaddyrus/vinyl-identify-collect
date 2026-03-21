@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { AnalysisResult } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius, shadows } from '@/theme';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 interface Props {
   result: AnalysisResult;
@@ -36,7 +37,7 @@ export function ResultCard({ result }: Props) {
       <View style={styles.row}>
         <View style={styles.halfSection}>
           <Text style={styles.label}>{labels.origin}</Text>
-          <Text style={styles.value}>{result.origin}</Text>
+          <Text style={styles.value}>{getDisplayName(result.origin)}</Text>
         </View>
         <View style={styles.halfSection}>
           <Text style={styles.label}>{labels.year}</Text>

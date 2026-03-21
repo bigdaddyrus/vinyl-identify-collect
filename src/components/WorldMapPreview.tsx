@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { OriginDistribution } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 interface Props {
   origins: OriginDistribution[];
@@ -48,7 +49,7 @@ export function WorldMapPreview({ origins, totalItems, onViewAll }: Props) {
               <Marker
                 key={i}
                 coordinate={{ latitude: origin.lat, longitude: origin.lng }}
-                title={origin.origin}
+                title={getDisplayName(origin.origin)}
                 description={`${origin.count} ${origin.count === 1 ? 'item' : 'items'}`}
                 pinColor={colors.accentPrimary}
               />

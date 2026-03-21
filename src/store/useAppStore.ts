@@ -5,7 +5,7 @@ import { AppStore, AnalysisResult, OriginDistribution } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { useState, useEffect } from 'react';
 import { getRarityScore } from '@/utils/rarity';
-import { countryCoordinates, normalizeOrigin } from '@/data/countryCoordinates';
+import { normalizeOrigin, getCoordinates } from '@/data/countryCoordinates';
 
 /**
  * Global app state using Zustand with AsyncStorage persistence
@@ -123,7 +123,7 @@ export const useAppStore = create<AppStore>()(
         });
         const result: OriginDistribution[] = [];
         originMap.forEach((count, origin) => {
-          const coords = countryCoordinates[origin];
+          const coords = getCoordinates(origin);
           if (coords) {
             result.push({ origin, count, lat: coords.lat, lng: coords.lng });
           } else {
