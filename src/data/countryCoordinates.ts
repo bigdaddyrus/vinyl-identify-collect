@@ -295,10 +295,14 @@ export function normalizeOrigin(raw: string): string {
   const upper = raw.trim().toUpperCase();
   if (ISO_COUNTRIES[upper]) return upper;
 
+  // Preserve any 3-letter alphabetic code shape as uppercase,
+  // even if it's not in our ISO_COUNTRIES subset.
+  if (/^[A-Za-z]{3}$/.test(upper)) return upper;
+
   // Alias lookup
   if (NAME_TO_ISO[key]) return NAME_TO_ISO[key];
 
-  // Fallback: title-case for unknown origins
+  // Fallback: title-case for unknown, non-code origins
   return titleCaseOrigin(raw);
 }
 
