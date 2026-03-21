@@ -3,7 +3,7 @@ import { AppConfig } from '@/types';
 /**
  * Single Source of Truth for all app content, theme, and configuration.
  *
- * VERTICAL: Vinyl Record Identification & Valuation (VinylSnap)
+ * VERTICAL: Vinyl Record Identification & Valuation (VinylCollect)
  *
  * To clone this app for a different vertical (coins, stamps, antiques, etc.):
  * 1. Update this config file with vertical-specific content
@@ -14,8 +14,8 @@ import { AppConfig } from '@/types';
  */
 
 export const appConfig: AppConfig = {
-  appName: 'VinylSnap',
-  appSlug: 'vinylsnap',
+  appName: 'VinylCollect',
+  appSlug: 'vinylcollect',
   appDescription: 'AI-powered vinyl record identification and valuation',
 
   splash: {
@@ -150,7 +150,7 @@ export const appConfig: AppConfig = {
   },
 
   home: {
-    heroTitle: 'VinylSnap',
+    heroTitle: 'VinylCollect',
     heroSubtitle: 'AI-Powered Vinyl Identification & Valuation',
     heroImage: undefined, // require('../../assets/images/home-hero.png')
     primaryCtaText: 'Identify Record',

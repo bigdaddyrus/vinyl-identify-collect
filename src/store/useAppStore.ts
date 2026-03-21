@@ -153,7 +153,7 @@ export const useAppStore = create<AppStore>()(
         }),
     }),
     {
-      name: 'vinylsnap-storage',
+      name: 'vinylcollect-storage',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

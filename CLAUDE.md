@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **reusable React Native (Expo) template** for Vision-AI identifier apps. It's designed as a configurable platform that can be cloned and adapted to any vertical market (stamps, coins, vinyl records, antiques, etc.) by simply changing the configuration file and assets.
 
-**Current Implementation:** Vinyl record identification and valuation app (VinylSnap), forked from the StampSnap template.
+**Current Implementation:** Vinyl record identification and valuation app (VinylCollect), forked from the StampSnap template.
 
 ## Commands
 
@@ -204,7 +204,7 @@ src/
 - Run `npm start -- --clear` to clear Metro cache
 
 ### Onboarding/Paywall loops or doesn't appear
-- Check AsyncStorage persistence: look for `vinylsnap-storage` key
+- Check AsyncStorage persistence: look for `vinylcollect-storage` key
 - Verify redirect guards in `(tabs)/_layout.tsx`
 - Use `useAppStore.getState().resetApp()` in console to reset state
 

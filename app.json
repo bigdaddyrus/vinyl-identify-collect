@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "VinylSnap",
-    "slug": "vinylsnap",
+    "name": "VinylCollect",
+    "slug": "vinylcollect",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "vinylsnap",
+    "scheme": "vinylcollect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vinylsnap.app",
+      "bundleIdentifier": "com.vinylcollect.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses your camera to identify and value vinyl records."
       }
     },
     "android": {
-      "package": "com.vinylsnap.app",
+      "package": "com.vinylcollect.app",
       "permissions": ["CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
