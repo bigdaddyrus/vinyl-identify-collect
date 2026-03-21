@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { AnalysisResult } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 interface Props {
   item: AnalysisResult;
@@ -36,7 +37,7 @@ export function CollectionCard({ item, onPress, onKebabPress }: Props) {
           {item.name}
         </Text>
         <Text style={styles.metadata} numberOfLines={1}>
-          {item.origin} · {item.year}
+          {getDisplayName(item.origin)} · {item.year}
         </Text>
       </View>
 

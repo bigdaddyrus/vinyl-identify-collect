@@ -22,6 +22,7 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult, ExtendedDetailSection } from '@/types';
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.38;
@@ -516,7 +517,7 @@ export default function ResultScreen() {
           <View style={styles.chipRow}>
             <View style={styles.chip}>
               <Ionicons name="flag" size={12} color={colors.iconMuted} />
-              <Text style={styles.chipText}>{result.origin}</Text>
+              <Text style={styles.chipText}>{getDisplayName(result.origin)}</Text>
             </View>
             <View style={styles.chip}>
               <Ionicons name="calendar" size={12} color={colors.iconMuted} />

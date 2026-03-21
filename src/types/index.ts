@@ -310,6 +310,7 @@ export interface AnalysisResult {
   imageUri?: string;
   images?: string[]; // Multiple image URIs (front, back, detail, etc.)
   createdAt: number; // timestamp
+  countryCode?: string; // ISO 3166-1 alpha-3 (e.g. "USA") — indexable in Supabase
   rarity?: string; // e.g. 'Very Common', 'Common', 'Uncommon', 'Rare', 'Very Rare', 'Extremely Rare'
   condition?: string; // e.g. 'Mint', 'AU', 'VF', 'F', 'VG', 'G', 'Fair', 'Poor', 'Uncertain'
   notes?: string; // User-editable notes

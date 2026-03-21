@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AnalysisResult } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius, shadows } from '@/theme';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 interface Props {
   item: AnalysisResult;
@@ -44,7 +45,7 @@ export function BestItemCard({ item, onPress }: Props) {
               {item.name}
             </Text>
             <Text style={styles.metadata}>
-              {item.origin} • {item.year}
+              {getDisplayName(item.origin)} • {item.year}
             </Text>
           </View>
 

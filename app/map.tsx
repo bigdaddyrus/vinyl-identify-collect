@@ -7,6 +7,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { OriginDistribution } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 export default function MapScreen() {
   const params = useLocalSearchParams<{ origins?: string; totalItems?: string }>();
@@ -80,7 +81,7 @@ export default function MapScreen() {
             <Marker
               key={i}
               coordinate={{ latitude: origin.lat, longitude: origin.lng }}
-              title={origin.origin}
+              title={getDisplayName(origin.origin)}
               description={`${origin.count} ${origin.count === 1 ? 'item' : 'items'}`}
               pinColor={colors.accentPrimary}
             />
@@ -100,7 +101,7 @@ export default function MapScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.originDot} />
-            <Text style={styles.originName}>{origin.origin}</Text>
+            <Text style={styles.originName}>{getDisplayName(origin.origin)}</Text>
             <Text style={styles.originCount}>
               {origin.count} {origin.count === 1 ? 'item' : 'items'}
             </Text>

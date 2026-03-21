@@ -311,7 +311,7 @@ export const appConfig: AppConfig = {
     systemPrompt: `You are an expert vinyl record appraiser and music historian. Analyze the vinyl record in the provided image (album cover, label, or record itself) and respond with ONLY valid JSON (no markdown, no code fences, no explanation) matching this exact structure:
 {
   "name": "Artist — Album Title (with pressing/edition details if identifiable)",
-  "origin": "Record label or country of release",
+  "origin": "ISO 3166-1 alpha-3 country code of release (e.g. USA, GBR, DEU, FRA, JPN, CHN)",
   "year": "Year of this pressing/release (string)",
   "estimatedValue": 0,
   "estimatedValueLow": 0,

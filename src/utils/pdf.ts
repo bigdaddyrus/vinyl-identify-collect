@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import { AnalysisResult } from '@/types';
 import { appConfig } from '@/config/appConfig';
+import { getDisplayName } from '@/data/countryCoordinates';
 
 const { currencySymbol, labels } = appConfig.result;
 
@@ -64,7 +65,7 @@ export async function exportCollectionToPDF(items: AnalysisResult[]): Promise<st
           ${imageHtml}
           <div class="item-name">${item.name}</div>
           <div class="item-meta">
-            <span>${labels.origin}: ${item.origin}</span>
+            <span>${labels.origin}: ${getDisplayName(item.origin)}</span>
             <span>${labels.year}: ${item.year}</span>
           </div>
           <div class="item-value-box">
