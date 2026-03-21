@@ -15,9 +15,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { GradientButton } from '@/components/GradientButton';
-import { useAppStore } from '@/store/useAppStore';
 import { colors, typography, spacing } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
+import { useScanCart } from '@/context/ScanCartContext';
+import { CapturedImage } from '@/types';
 
 const MIN_CROP_SIZE = 80;
 const HANDLE_HIT = 28; // touch target for corner handles
@@ -25,8 +26,8 @@ const CORNER_VISUAL = 20;
 const CORNER_THICKNESS = 3;
 
 export default function CropScreen() {
-  const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
-  const incrementScanCount = useAppStore((state) => state.incrementScanCount);
+  const { imageUri, imageType } = useLocalSearchParams<{ imageUri: string; imageType: string }>();
+  const { addImage } = useScanCart();
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [canvasLayout, setCanvasLayout] = useState<{ width: number; height: number } | null>(null);
   const [isCropping, setIsCropping] = useState(false);
@@ -286,15 +287,15 @@ export default function CropScreen() {
         { compress: 0.85, format: SaveFormat.JPEG }
       );
 
-      router.replace({
-        pathname: '/(tabs)/(scanner)/loading',
-        params: { imageUri: result.uri },
-      });
+      // Add cropped image to cart and return to scanner
+      const type = (imageType as CapturedImage['type']) || 'front';
+      addImage({ type, uri: result.uri });
+      router.replace('/(tabs)/(scanner)');
     } catch {
-      router.replace({
-        pathname: '/(tabs)/(scanner)/loading',
-        params: { imageUri: imageUri || '' },
-      });
+      // If crop fails, add original image to cart
+      const type = (imageType as CapturedImage['type']) || 'front';
+      addImage({ type, uri: imageUri || '' });
+      router.replace('/(tabs)/(scanner)');
     } finally {
       setIsCropping(false);
     }
@@ -302,7 +303,6 @@ export default function CropScreen() {
 
   const handleConfirm = () => {
     triggerButtonPress();
-    incrementScanCount();
     performCrop();
   };
 
@@ -311,12 +311,16 @@ export default function CropScreen() {
     router.back();
   };
 
+  const typeLabel = imageType
+    ? imageType.charAt(0).toUpperCase() + imageType.slice(1)
+    : 'Photo';
+
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Crop Photo</Text>
+          <Text style={styles.headerTitle}>Crop {typeLabel}</Text>
           <Text style={styles.headerHint}>Drag the frame or corners to adjust</Text>
         </View>
 

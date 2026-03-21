@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -11,6 +11,7 @@ import { HorizontalCarousel } from '@/components/HorizontalCarousel';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
+import { exportCollectionAsJSON } from '@/utils/exportCollection';
 
 export default function HomeScreen() {
   const { home } = appConfig;
@@ -29,6 +30,15 @@ export default function HomeScreen() {
 
   const handleProBadge = () => {
     router.push({ pathname: '/paywall', params: { modal: 'true' } });
+  };
+
+  const handleExportData = async () => {
+    try {
+      await exportCollectionAsJSON(collection);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed.';
+      Alert.alert('Export Error', message);
+    }
   };
 
   // Get up to 3 recent collection images for the stacked display
@@ -131,6 +141,18 @@ export default function HomeScreen() {
             variant="secondary"
           />
         </View>
+
+        {/* Export Data */}
+        {!isEmpty && (
+          <View style={styles.exportContainer}>
+            <TouchableOpacity style={styles.exportButton} onPress={handleExportData} activeOpacity={0.7}>
+              <Ionicons name="download-outline" size={18} color={colors.accentPrimary} />
+              <Text style={styles.exportButtonText}>
+                {appConfig.collection.exportDataText ?? 'Export Data'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Promo Banner */}
         {home.promoBanner?.enabled && (
@@ -289,6 +311,28 @@ const styles = StyleSheet.create({
   },
   ctaSpacer: {
     height: spacing.sm,
+  },
+
+  // ── Export ──
+  exportContainer: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSubtle,
+  },
+  exportButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accentPrimary,
   },
 
   // ── Promo banner ──

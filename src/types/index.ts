@@ -67,6 +67,20 @@ export interface ScannerConfig {
   instructionText: string;
   galleryButtonText: string;
   analyzeButtonText: string;
+  frontCoverButtonText?: string;
+  backCoverButtonText?: string;
+  labelButtonText?: string;
+  runAnalysisButtonText?: string;
+}
+
+export interface CapturedImage {
+  type: 'front' | 'back' | 'label';
+  uri: string;
+}
+
+export interface ScanCart {
+  images: CapturedImage[];
+  currentStep: 'front' | 'back' | 'label' | 'ready';
 }
 
 export interface ResultLabels {
@@ -162,6 +176,7 @@ export interface CollectionConfig {
   emptyStateText: string;
   emptyStateSubtext: string;
   exportCollectionText: string;
+  exportDataText?: string;
   currencyLabel: string;
   tabs: { key: string; label: string }[];
   statsLabels: {
@@ -240,6 +255,7 @@ export interface ResultConfig {
   labels: ResultLabels;
   upsellCta?: ResultUpsellConfig;
   showFeedback?: boolean;
+  forceSaveText?: string;
 }
 
 export interface AiConfig {

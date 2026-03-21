@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
@@ -14,14 +15,37 @@ import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerPriceReveal } from '@/utils/haptics';
 import { getRandomMockResult } from '@/mock/analysisData';
-import { analyzeImage } from '@/services/geminiVision';
-import { AnalysisResult } from '@/types';
+import { analyzeImages } from '@/services/geminiVision';
+import { useAppStore } from '@/store/useAppStore';
+import { useScanCart } from '@/context/ScanCartContext';
+import { AnalysisResult, CapturedImage } from '@/types';
 
 type StepStatus = 'pending' | 'active' | 'complete';
 
+const THUMB_SIZE = 40;
+
 export default function LoadingScreen() {
-  const params = useLocalSearchParams<{ imageUri?: string }>();
-  const imageUri = params.imageUri || '';
+  const params = useLocalSearchParams<{ imageUri?: string; cartImages?: string }>();
+  const incrementScanCount = useAppStore((state) => state.incrementScanCount);
+  const { resetCart } = useScanCart();
+
+  // Parse cart images or fall back to legacy single imageUri
+  const parsedCart: CapturedImage[] = (() => {
+    if (params.cartImages) {
+      try {
+        return JSON.parse(params.cartImages);
+      } catch {
+        return [];
+      }
+    }
+    if (params.imageUri) {
+      return [{ type: 'front' as const, uri: params.imageUri }];
+    }
+    return [];
+  })();
+
+  const imageUri = parsedCart[0]?.uri || params.imageUri || '';
+
   const steps = appConfig.loadingSteps;
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [apiDone, setApiDone] = useState(false);
@@ -36,6 +60,11 @@ export default function LoadingScreen() {
     width: `${progressWidth.value}%`,
   }));
 
+  // Increment scan count on mount
+  useEffect(() => {
+    incrementScanCount();
+  }, [incrementScanCount]);
+
   const navigateToResult = useCallback((result: AnalysisResult) => {
     if (navigatedRef.current) return;
     navigatedRef.current = true;
@@ -46,6 +75,7 @@ export default function LoadingScreen() {
     // Route to not-found screen if AI couldn't identify the item
     if (result.confidence === 0) {
       setTimeout(() => {
+        resetCart();
         router.replace({
           pathname: '/(tabs)/(scanner)/notfound',
           params: { imageUri: result.imageUri ?? '' },
@@ -55,12 +85,13 @@ export default function LoadingScreen() {
     }
 
     setTimeout(() => {
+      resetCart();
       router.replace({
         pathname: '/(tabs)/(scanner)/result',
         params: { resultId: result.id, resultData: JSON.stringify(result) },
       });
     }, 500);
-  }, [progressWidth]);
+  }, [progressWidth, resetCart]);
 
   useEffect(() => {
     if (error) return;
@@ -103,14 +134,15 @@ export default function LoadingScreen() {
       try {
         let result: AnalysisResult;
 
-        if (imageUri) {
+        if (parsedCart.length > 0) {
           try {
-            result = await analyzeImage(imageUri);
+            result = await analyzeImages(parsedCart);
           } catch (apiError) {
             const message = apiError instanceof Error ? apiError.message : '';
             if (message.includes('API key not configured')) {
               result = getRandomMockResult();
               result.imageUri = imageUri;
+              result.images = parsedCart.map((img) => img.uri);
             } else {
               throw apiError;
             }
@@ -130,7 +162,7 @@ export default function LoadingScreen() {
     runAnalysis();
 
     return () => clearTimeout(stepTimer);
-  }, [error, imageUri, steps.length, progressWidth]);
+  }, [error, imageUri, steps.length, progressWidth, parsedCart.length]);
 
   // When API finishes and the step sequence has completed, navigate to the result
   useEffect(() => {
@@ -152,7 +184,34 @@ export default function LoadingScreen() {
   };
 
   const handleGoBack = () => {
+    resetCart();
     router.back();
+  };
+
+  const handleForceSave = () => {
+    // Create skeleton result with images from cart
+    const skeletonResult: AnalysisResult = {
+      id: `manual-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      name: '',
+      origin: 'Unknown',
+      year: 'Unknown',
+      estimatedValue: 0,
+      confidence: 0,
+      description: 'Manually saved item.',
+      imageUri: parsedCart[0]?.uri,
+      images: parsedCart.map((img) => img.uri),
+      createdAt: Date.now(),
+    };
+
+    resetCart();
+    router.replace({
+      pathname: '/(tabs)/(scanner)/result',
+      params: {
+        resultId: skeletonResult.id,
+        resultData: JSON.stringify(skeletonResult),
+        isManualEntry: 'true',
+      },
+    });
   };
 
   const getStepStatus = (index: number): StepStatus => {
@@ -179,6 +238,16 @@ export default function LoadingScreen() {
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={styles.forceSaveButton}
+              onPress={handleForceSave}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.accentPrimary} />
+              <Text style={styles.forceSaveButtonText}>
+                {appConfig.result.forceSaveText ?? 'Save Manually'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.backButton}
               onPress={handleGoBack}
               activeOpacity={0.7}
@@ -195,6 +264,24 @@ export default function LoadingScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.content}>
         <Text style={styles.title}>Analyzing...</Text>
+
+        {/* Thumbnail strip during loading */}
+        {parsedCart.length > 1 && (
+          <View style={styles.thumbnailStrip}>
+            {parsedCart.map((img, i) => (
+              <View key={`${img.type}-${i}`} style={styles.thumbnailItem}>
+                <Image
+                  source={{ uri: img.uri }}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.thumbnailLabel}>
+                  {img.type.charAt(0).toUpperCase() + img.type.slice(1)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Progress bar */}
         <View style={styles.progressTrack}>
@@ -234,6 +321,28 @@ const styles = StyleSheet.create({
     ...typography.h1,
     textAlign: 'center',
     marginBottom: spacing.lg,
+  },
+  thumbnailStrip: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  thumbnailItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  thumbnail: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  thumbnailLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   progressTrack: {
     width: '100%',
@@ -283,6 +392,22 @@ const styles = StyleSheet.create({
   retryButtonText: {
     ...typography.h3,
     color: colors.white,
+  },
+  forceSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md + spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+    marginBottom: spacing.md,
+  },
+  forceSaveButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.accentPrimary,
   },
   backButton: {
     paddingVertical: spacing.md,

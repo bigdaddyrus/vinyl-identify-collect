@@ -11,15 +11,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { useAppStore } from '@/store/useAppStore';
+import { useScanCart } from '@/context/ScanCartContext';
+import { GradientButton } from '@/components/GradientButton';
+import { CapturedImage } from '@/types';
 
 const { width } = Dimensions.get('window');
 const CROP_SIZE = width * 0.7;
 const DAILY_SNAP_LIMIT = 10; // Free tier daily limit
+const THUMB_SIZE = 48;
+
+const STEP_LABELS: Record<string, string> = {
+  front: appConfig.scanner.frontCoverButtonText ?? 'Scan Front Cover',
+  back: appConfig.scanner.backCoverButtonText ?? 'Scan Back Cover',
+  label: appConfig.scanner.labelButtonText ?? 'Scan Center Label (Optional)',
+};
+
+const STEP_INSTRUCTIONS: Record<string, string> = {
+  front: 'Position the front cover within the frame',
+  back: 'Position the back cover within the frame',
+  label: 'Position the center label within the frame',
+  ready: 'All images captured — ready to analyze',
+};
 
 export default function ScannerHomeScreen() {
   const hasSeenSnapTips = useAppStore((state) => state.hasSeenSnapTips);
@@ -30,6 +48,7 @@ export default function ScannerHomeScreen() {
   const [hasShownTips, setHasShownTips] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [zoom, setZoom] = useState(0); // 0 = 1x, normalized 0-1
+  const { cart, resetCart } = useScanCart();
 
   // Show snap tips on first visit
   useEffect(() => {
@@ -41,10 +60,10 @@ export default function ScannerHomeScreen() {
 
   const snapsRemaining = isPremium ? null : Math.max(0, DAILY_SNAP_LIMIT - scanCount);
 
-  const goToCrop = (uri: string) => {
+  const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
     router.push({
       pathname: '/(tabs)/(scanner)/crop',
-      params: { imageUri: uri },
+      params: { imageUri: uri, imageType },
     });
   };
 
@@ -68,7 +87,8 @@ export default function ScannerHomeScreen() {
     });
 
     if (!result.canceled) {
-      goToCrop(result.assets[0].uri);
+      const imageType = cart.currentStep === 'ready' ? 'label' : cart.currentStep;
+      goToCrop(result.assets[0].uri, imageType);
     }
   };
 
@@ -80,7 +100,29 @@ export default function ScannerHomeScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
       if (photo) {
-        goToCrop(photo.uri);
+        const imageType = cart.currentStep === 'ready' ? 'label' : cart.currentStep;
+        goToCrop(photo.uri, imageType);
+      }
+    } catch {
+      Alert.alert('Capture Failed', 'Unable to take photo. Please try again.');
+    }
+  };
+
+  const handleRunAnalysis = () => {
+    triggerButtonPress();
+    router.replace({
+      pathname: '/(tabs)/(scanner)/loading',
+      params: { cartImages: JSON.stringify(cart.images) },
+    });
+  };
+
+  const handleScanLabelFromCamera = async () => {
+    triggerButtonPress();
+    if (!cameraRef.current) return;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      if (photo) {
+        goToCrop(photo.uri, 'label');
       }
     } catch {
       Alert.alert('Capture Failed', 'Unable to take photo. Please try again.');
@@ -103,6 +145,11 @@ export default function ScannerHomeScreen() {
   const handleOpenTips = () => {
     triggerButtonPress();
     router.push('/(tabs)/(scanner)/tips');
+  };
+
+  const handleResetCart = () => {
+    triggerButtonPress();
+    resetCart();
   };
 
   // Permission not yet determined
@@ -147,6 +194,9 @@ export default function ScannerHomeScreen() {
     );
   }
 
+  const isReady = cart.currentStep === 'ready';
+  const hasLabel = cart.images.some((img) => img.type === 'label');
+
   return (
     <View style={styles.container}>
       {/* Camera View (full screen behind everything) */}
@@ -176,6 +226,13 @@ export default function ScannerHomeScreen() {
 
           {/* Right actions */}
           <View style={styles.topBarRight}>
+            {/* Reset cart (if images captured) */}
+            {cart.images.length > 0 && (
+              <TouchableOpacity style={styles.topBarIcon} onPress={handleResetCart} activeOpacity={0.7}>
+                <Ionicons name="refresh" size={20} color={colors.white} />
+              </TouchableOpacity>
+            )}
+
             {/* Flash toggle */}
             <TouchableOpacity style={styles.topBarIcon} onPress={toggleFlash} activeOpacity={0.7}>
               <Ionicons
@@ -203,42 +260,91 @@ export default function ScannerHomeScreen() {
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
         <Text style={styles.instructionText}>
-          {appConfig.scanner.instructionText}
+          {STEP_INSTRUCTIONS[cart.currentStep] || appConfig.scanner.instructionText}
         </Text>
       </View>
 
       {/* Bottom Controls */}
       <SafeAreaView edges={['bottom']} style={styles.bottomSafe}>
-        <View style={styles.controls}>
-          {/* Gallery button */}
-          <TouchableOpacity
-            style={styles.sideButton}
-            onPress={handleGalleryPick}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="images" size={24} color={colors.white} />
-          </TouchableOpacity>
-
-          {/* Center column: capture + zoom */}
-          <View style={styles.captureColumn}>
-            {/* Capture Button */}
-            <TouchableOpacity
-              style={styles.captureButton}
-              onPress={handleCapture}
-              activeOpacity={0.8}
-            >
-              <View style={styles.captureButtonInner} />
-            </TouchableOpacity>
-
-            {/* Zoom toggle */}
-            <TouchableOpacity style={styles.zoomButton} onPress={cycleZoom} activeOpacity={0.7}>
-              <Text style={styles.zoomText}>{zoomLabel}</Text>
-            </TouchableOpacity>
+        {/* Thumbnail strip */}
+        {cart.images.length > 0 && (
+          <View style={styles.thumbnailStrip}>
+            {cart.images.map((img) => (
+              <View key={img.type} style={styles.thumbnailItem}>
+                <Image
+                  source={{ uri: img.uri }}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.thumbnailLabel}>
+                  {img.type.charAt(0).toUpperCase() + img.type.slice(1)}
+                </Text>
+              </View>
+            ))}
           </View>
+        )}
 
-          {/* Placeholder to balance layout */}
-          <View style={styles.sideButton} />
-        </View>
+        {isReady ? (
+          /* Ready state: optional label scan + Run Analysis */
+          <View style={styles.readyControls}>
+            {!hasLabel && (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleScanLabelFromCamera}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="disc-outline" size={18} color={colors.accentPrimary} />
+                <Text style={styles.secondaryButtonText}>
+                  {appConfig.scanner.labelButtonText ?? 'Scan Center Label (Optional)'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <GradientButton
+              text={appConfig.scanner.runAnalysisButtonText ?? 'Run Analysis'}
+              onPress={handleRunAnalysis}
+              icon="sparkles"
+            />
+          </View>
+        ) : (
+          /* Capture state: standard controls */
+          <View style={styles.controls}>
+            {/* Step label */}
+            <Text style={styles.stepLabel}>
+              {STEP_LABELS[cart.currentStep] || appConfig.scanner.analyzeButtonText}
+            </Text>
+
+            <View style={styles.controlsRow}>
+              {/* Gallery button */}
+              <TouchableOpacity
+                style={styles.sideButton}
+                onPress={handleGalleryPick}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="images" size={24} color={colors.white} />
+              </TouchableOpacity>
+
+              {/* Center column: capture + zoom */}
+              <View style={styles.captureColumn}>
+                {/* Capture Button */}
+                <TouchableOpacity
+                  style={styles.captureButton}
+                  onPress={handleCapture}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.captureButtonInner} />
+                </TouchableOpacity>
+
+                {/* Zoom toggle */}
+                <TouchableOpacity style={styles.zoomButton} onPress={cycleZoom} activeOpacity={0.7}>
+                  <Text style={styles.zoomText}>{zoomLabel}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Placeholder to balance layout */}
+              <View style={styles.sideButton} />
+            </View>
+          </View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -351,6 +457,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // ── Thumbnail Strip ──
+  thumbnailStrip: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  thumbnailItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  thumbnail: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: colors.accentPrimary,
+  },
+  thumbnailLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+
   // ── Bottom Controls ──
   bottomSafe: {
     position: 'absolute',
@@ -359,11 +490,20 @@ const styles = StyleSheet.create({
     right: 0,
   },
   controls: {
+    paddingBottom: spacing.md,
+  },
+  stepLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
   },
   sideButton: {
     width: 48,
@@ -405,6 +545,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: colors.white,
+  },
+
+  // ── Ready state controls ──
+  readyControls: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: 14,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.accentPrimary,
   },
 
   // ── Permission States ──

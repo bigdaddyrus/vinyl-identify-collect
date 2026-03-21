@@ -247,6 +247,10 @@ export const appConfig: AppConfig = {
     instructionText: 'Position record cover within the frame',
     galleryButtonText: 'Choose from Gallery',
     analyzeButtonText: 'Analyze Record',
+    frontCoverButtonText: 'Scan Front Cover',
+    backCoverButtonText: 'Scan Back Cover',
+    labelButtonText: 'Scan Center Label (Optional)',
+    runAnalysisButtonText: 'Run Analysis',
   },
 
   result: {
@@ -267,6 +271,7 @@ export const appConfig: AppConfig = {
       icon: 'ribbon',
     },
     showFeedback: true,
+    forceSaveText: 'Save Manually',
   },
 
   collection: {
@@ -279,6 +284,7 @@ export const appConfig: AppConfig = {
     emptyStateText: 'No records in your collection yet',
     emptyStateSubtext: 'Scan your first vinyl to get started',
     exportCollectionText: 'Export Collection Book',
+    exportDataText: 'Export Data',
     currencyLabel: 'Collection Value (USD)',
     tabs: [
       { key: 'summary', label: 'Summary' },
@@ -308,7 +314,7 @@ export const appConfig: AppConfig = {
   ai: {
     provider: 'gemini',
     model: 'gemini-2.5-flash',
-    systemPrompt: `You are an expert vinyl record appraiser and music historian. Analyze the vinyl record in the provided image (album cover, label, or record itself) and respond with ONLY valid JSON (no markdown, no code fences, no explanation) matching this exact structure:
+    systemPrompt: `You are an expert vinyl record appraiser and music historian. Analyze these images of a vinyl record (front cover, back cover, and optional center label). Look for catalog numbers, barcodes, matrix/runout numbers, or label variations to determine the exact pressing. Respond with ONLY valid JSON (no markdown, no code fences, no explanation) matching this exact structure:
 {
   "name": "Artist — Album Title (with pressing/edition details if identifiable)",
   "origin": "ISO 3166-1 alpha-3 country code of release (e.g. USA, GBR, DEU, FRA, JPN, CHN)",
