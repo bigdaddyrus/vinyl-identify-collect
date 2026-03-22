@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -11,7 +12,7 @@ import { HorizontalCarousel } from '@/components/HorizontalCarousel';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
-import { exportCollectionAsJSON } from '@/utils/exportCollection';
+import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
 
 export default function HomeScreen() {
   const { home } = appConfig;
@@ -19,6 +20,9 @@ export default function HomeScreen() {
   const getTotalPortfolioValue = useAppStore((state) => state.getTotalPortfolioValue);
   const getUniqueOrigins = useAppStore((state) => state.getUniqueOrigins);
   const isEmpty = collection.length === 0;
+
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
 
   const handleIdentify = () => {
     router.push('/(tabs)/(scanner)');
@@ -38,6 +42,21 @@ export default function HomeScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Export failed.';
       Alert.alert('Export Error', message);
+    }
+  };
+
+  const handleExportImages = async () => {
+    try {
+      setExporting(true);
+      setExportProgress({ current: 0, total: 0 });
+      await exportImageAssetsZip(collection, (current, total) => {
+        setExportProgress({ current, total });
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed.';
+      Alert.alert('Export Error', message);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -98,9 +117,13 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Right: Stacked stamp images */}
+            {/* Right: Stacked stamp images — tap to view collection */}
             {stackImages.length > 0 && (
-              <View style={styles.stackContainer}>
+              <TouchableOpacity
+                style={styles.stackContainer}
+                onPress={() => router.push('/(tabs)/portfolio')}
+                activeOpacity={0.8}
+              >
                 {stackImages.map((item, index) => (
                   <View
                     key={item.id}
@@ -122,7 +145,7 @@ export default function HomeScreen() {
                     />
                   </View>
                 ))}
-              </View>
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -134,12 +157,16 @@ export default function HomeScreen() {
             onPress={handleIdentify}
             icon="camera"
           />
-          <View style={styles.ctaSpacer} />
-          <GradientButton
-            text={home.secondaryCtaText}
-            onPress={handleGrading}
-            variant="secondary"
-          />
+          {home.showGradingButton && (
+            <>
+              <View style={styles.ctaSpacer} />
+              <GradientButton
+                text={home.secondaryCtaText}
+                onPress={handleGrading}
+                variant="secondary"
+              />
+            </>
+          )}
         </View>
 
         {/* Export Data */}
@@ -150,6 +177,11 @@ export default function HomeScreen() {
               <Text style={styles.exportButtonText}>
                 {appConfig.collection.exportDataText ?? 'Export Data'}
               </Text>
+            </TouchableOpacity>
+            <View style={styles.exportSpacer} />
+            <TouchableOpacity style={styles.exportImagesButton} onPress={handleExportImages} activeOpacity={0.7}>
+              <Ionicons name="images-outline" size={18} color={colors.textSecondary} />
+              <Text style={styles.exportImagesButtonText}>Export Images (ZIP)</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -212,6 +244,31 @@ export default function HomeScreen() {
           />
         )}
       </ScrollView>
+
+      {/* Export progress overlay */}
+      <Modal visible={exporting} transparent animationType="fade">
+        <View style={styles.progressOverlay}>
+          <View style={styles.progressCard}>
+            <ActivityIndicator size="small" color={colors.accentPrimary} />
+            <Text style={styles.progressTitle}>Exporting Images...</Text>
+            <Text style={styles.progressCount}>
+              {exportProgress.current} / {exportProgress.total} images
+            </Text>
+            <View style={styles.progressBarBg}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: exportProgress.total > 0
+                      ? `${(exportProgress.current / exportProgress.total) * 100}%`
+                      : '0%',
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -334,6 +391,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.accentPrimary,
   },
+  exportSpacer: {
+    height: spacing.sm,
+  },
+  exportImagesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  exportImagesButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
 
   // ── Promo banner ──
   promoBanner: {
@@ -411,5 +487,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+
+  // ── Export progress overlay ──
+  progressOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressCard: {
+    width: '80%',
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  progressCount: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  progressBarBg: {
+    width: '100%',
+    height: 6,
+    backgroundColor: colors.backgroundTertiary,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.accentPrimary,
+    borderRadius: 3,
   },
 });

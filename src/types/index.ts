@@ -131,6 +131,7 @@ export interface HomeConfig {
   heroImage?: any;
   primaryCtaText: string;
   secondaryCtaText: string;
+  showGradingButton: boolean;
   emptyState: {
     image?: any;
     title: string;
@@ -327,8 +328,12 @@ export interface AnalysisResult {
   images?: string[]; // Multiple image URIs (front, back, detail, etc.)
   createdAt: number; // timestamp
   countryCode?: string; // ISO 3166-1 alpha-3 (e.g. "USA") — indexable in Supabase
+  label?: string; // Record label (e.g. "Columbia Records", "Blue Note")
+  genre?: string; // Music genre (e.g. "Rock", "Jazz", "Electronic")
   rarity?: string; // e.g. 'Very Common', 'Common', 'Uncommon', 'Rare', 'Very Rare', 'Extremely Rare'
   condition?: string; // e.g. 'Mint', 'AU', 'VF', 'F', 'VG', 'G', 'Fair', 'Poor', 'Uncertain'
+  albumArtQuery?: string; // Search query for scraping official album art (e.g. "Artist - Album - Year")
+  collectionDate?: number; // Editable collection date (defaults to createdAt)
   notes?: string; // User-editable notes
   extendedDetails?: ExtendedDetailSection[];
 }

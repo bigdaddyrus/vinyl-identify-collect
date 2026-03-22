@@ -8,6 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +26,9 @@ const { width } = Dimensions.get('window');
 const CROP_SIZE = width * 0.7;
 const DAILY_SNAP_LIMIT = 10; // Free tier daily limit
 const THUMB_SIZE = 48;
+
+const ZOOM_STEPS = [0, 0.125, 0.25, 0.375, 0.5];
+const ZOOM_LABELS = ['1x', '1.5x', '2x', '2.5x', '3x'];
 
 const STEP_LABELS: Record<string, string> = {
   front: appConfig.scanner.frontCoverButtonText ?? 'Scan Front Cover',
@@ -134,13 +138,42 @@ export default function ScannerHomeScreen() {
     setFlashEnabled((prev) => !prev);
   };
 
+  const [zoomIndex, setZoomIndex] = useState(0);
+  const lastPinchZoom = useRef(0);
+
   const cycleZoom = () => {
     triggerButtonPress();
-    // Cycle: 1x (0) -> 2x (0.5) -> 1x (0)
-    setZoom((prev) => (prev === 0 ? 0.5 : 0));
+    setZoomIndex((prev) => {
+      const next = (prev + 1) % ZOOM_STEPS.length;
+      setZoom(ZOOM_STEPS[next]);
+      return next;
+    });
   };
 
-  const zoomLabel = zoom === 0 ? '1x' : '2x';
+  const pinchGesture = Gesture.Pinch()
+    .runOnJS(true)
+    .onStart(() => {
+      lastPinchZoom.current = zoom;
+    })
+    .onUpdate((e) => {
+      const newZoom = Math.min(0.5, Math.max(0, lastPinchZoom.current + (e.scale - 1) * 0.25));
+      setZoom(newZoom);
+    })
+    .onEnd(() => {
+      // Snap zoomIndex to nearest step
+      let nearest = 0;
+      let minDist = Math.abs(zoom - ZOOM_STEPS[0]);
+      for (let i = 1; i < ZOOM_STEPS.length; i++) {
+        const dist = Math.abs(zoom - ZOOM_STEPS[i]);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = i;
+        }
+      }
+      setZoomIndex(nearest);
+    });
+
+  const zoomLabel = ZOOM_LABELS[zoomIndex];
 
   const handleOpenTips = () => {
     triggerButtonPress();
@@ -250,19 +283,21 @@ export default function ScannerHomeScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Center: Crop overlay */}
-      <View style={styles.centerOverlay} pointerEvents="none">
-        <View style={styles.cropFrame}>
-          {/* Corner markers */}
-          <View style={[styles.corner, styles.cornerTL]} />
-          <View style={[styles.corner, styles.cornerTR]} />
-          <View style={[styles.corner, styles.cornerBL]} />
-          <View style={[styles.corner, styles.cornerBR]} />
+      {/* Center: Crop overlay + pinch-to-zoom */}
+      <GestureDetector gesture={pinchGesture}>
+        <View style={styles.centerOverlay}>
+          <View style={styles.cropFrame}>
+            {/* Corner markers */}
+            <View style={[styles.corner, styles.cornerTL]} />
+            <View style={[styles.corner, styles.cornerTR]} />
+            <View style={[styles.corner, styles.cornerBL]} />
+            <View style={[styles.corner, styles.cornerBR]} />
+          </View>
+          <Text style={styles.instructionText}>
+            {STEP_INSTRUCTIONS[cart.currentStep] || appConfig.scanner.instructionText}
+          </Text>
         </View>
-        <Text style={styles.instructionText}>
-          {STEP_INSTRUCTIONS[cart.currentStep] || appConfig.scanner.instructionText}
-        </Text>
-      </View>
+      </GestureDetector>
 
       {/* Bottom Controls */}
       <SafeAreaView edges={['bottom']} style={styles.bottomSafe}>
@@ -488,6 +523,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    backgroundColor: 'rgba(0,0,0,0.85)',
   },
   controls: {
     paddingBottom: spacing.md,

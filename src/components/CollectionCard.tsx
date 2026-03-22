@@ -36,8 +36,18 @@ export function CollectionCard({ item, onPress, onKebabPress }: Props) {
         <Text style={styles.name} numberOfLines={2}>
           {item.name}
         </Text>
+        {item.label && (
+          <Text style={styles.label} numberOfLines={1}>
+            {item.label}
+          </Text>
+        )}
         <Text style={styles.metadata} numberOfLines={1}>
-          {getDisplayName(item.origin)} · {item.year}
+          {[
+            item.genre,
+            getDisplayName(item.origin),
+            item.year,
+            item.condition,
+          ].filter(Boolean).join(' · ')}
         </Text>
       </View>
 
@@ -92,6 +102,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 15,
     marginBottom: 2,
+  },
+  label: {
+    ...typography.caption,
+    color: colors.textTertiary,
+    fontSize: 12,
+    marginBottom: 1,
   },
   metadata: {
     ...typography.caption,

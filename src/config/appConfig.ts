@@ -155,6 +155,7 @@ export const appConfig: AppConfig = {
     heroImage: undefined, // require('../../assets/images/home-hero.png')
     primaryCtaText: 'Identify Record',
     secondaryCtaText: 'Grading',
+    showGradingButton: false,
     emptyState: {
       image: undefined, // require('../../assets/images/hero-item.png')
       title: "Know your record's true value",
@@ -324,6 +325,10 @@ export const appConfig: AppConfig = {
   "estimatedValueHigh": 0,
   "confidence": 0,
   "rarity": "Common",
+  "label": "Record Label (e.g. Columbia Records, Blue Note, Motown)",
+  "genre": "Primary music genre",
+  "condition": "Vinyl condition grade: Mint (M), Near Mint (NM), Very Good Plus (VG+), Very Good (VG), Good Plus (G+), Good (G), Fair (F), Poor (P)",
+  "album_art_query": "A highly specific search query for scraping the official album cover art (e.g. 'Pink Floyd - The Dark Side of the Moon - 1973')",
   "description": "Detailed analysis including pressing info, condition notes, label details, and notable features. Keep under 400 characters.",
   "extendedDetails": [
     {
@@ -338,6 +343,7 @@ Field notes:
 - estimatedValueLow / estimatedValueHigh: realistic market price range in USD
 - confidence: integer 0-100
 - rarity: one of "Very Common", "Common", "Uncommon", "Rare", "Very Rare", "Extremely Rare"
+- genre: one of "Blues", "Rock", "Pop", "Jazz", "Funk", "Soul", "Electronic", "Classical", "Hip Hop", "R&B", "World", "Country", "Folk", "Metal", "Latin", "Reggae", "Non-Music", "Stage & Screen"
 - description: concise, under 400 characters
 - extendedDetails: array of 3-5 sections covering Record Details (icon: "disc", items: format, speed, label, catalog number, matrix/runout), Value Analysis (icon: "cash", items: median sale, price trend, pressing premium), Pressing Info (icon: "search", items: pressing plant, country, variant notes, special features), Historical Context (icon: "book", items: chart positions, cultural significance, production notes), Collector Info (icon: "people", items: demand level, completist notes, related releases). Each section should have 3-5 items.
 - If you cannot identify the record or the image is unclear, set confidence to 0 and explain in description`,

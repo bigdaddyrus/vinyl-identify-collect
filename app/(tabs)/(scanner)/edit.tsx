@@ -21,6 +21,25 @@ import { AnalysisResult } from '@/types';
 import { colors, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 
+const GENRE_OPTIONS = [
+  'Blues', 'Rock', 'Pop', 'Jazz', 'Funk', 'Soul', 'Electronic',
+  'Classical', 'Hip Hop', 'R&B', 'World', 'Country', 'Folk',
+  'Metal', 'Latin', 'Reggae', 'Non-Music', 'Stage & Screen',
+];
+
+function formatDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+}
+
+function parseDate(str: string): number | null {
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
 export default function EditScreen() {
   const params = useLocalSearchParams();
   const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
@@ -40,8 +59,15 @@ export default function EditScreen() {
   const [year, setYear] = useState(item?.year ?? '');
   const [value, setValue] = useState(item?.estimatedValue?.toString() ?? '');
   const [grade, setGrade] = useState(item?.condition ?? '');
+  const [label, setLabel] = useState(item?.label ?? '');
+  const [origin, setOrigin] = useState(item?.origin ?? '');
+  const [genre, setGenre] = useState(item?.genre ?? '');
+  const [collectionDateStr, setCollectionDateStr] = useState(
+    formatDate(item?.collectionDate ?? item?.createdAt ?? Date.now())
+  );
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [showGradePicker, setShowGradePicker] = useState(false);
+  const [showGenrePicker, setShowGenrePicker] = useState(false);
 
   const gradeOptions = appConfig.collection.gradeOptions ?? [];
 
@@ -56,11 +82,16 @@ export default function EditScreen() {
   const handleSave = () => {
     triggerButtonPress();
     const numericValue = parseFloat(value);
+    const parsedDate = parseDate(collectionDateStr);
     updateCollectionItem(item.id, {
       name: name.trim() || item.name,
       year: year.trim() || item.year,
       estimatedValue: isNaN(numericValue) ? item.estimatedValue : numericValue,
       condition: grade || undefined,
+      label: label.trim() || undefined,
+      origin: origin.trim() || item.origin,
+      genre: genre || undefined,
+      collectionDate: parsedDate ?? item.collectionDate ?? item.createdAt,
       notes: notes.trim() || undefined,
     });
     router.back();
@@ -91,17 +122,72 @@ export default function EditScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Variety / Year */}
+          {/* Name */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Variety (Year)</Text>
+            <Text style={styles.fieldLabel}>Name</Text>
+            <TextInput
+              style={styles.textInput}
+              value={name}
+              onChangeText={setName}
+              placeholder="Record name"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Year */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Year</Text>
             <TextInput
               style={styles.textInput}
               value={year}
               onChangeText={setYear}
               placeholder="e.g. 1967"
               placeholderTextColor={colors.textTertiary}
+              keyboardType="number-pad"
               returnKeyType="next"
             />
+          </View>
+
+          {/* Label */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Record Label</Text>
+            <TextInput
+              style={styles.textInput}
+              value={label}
+              onChangeText={setLabel}
+              placeholder="e.g. Columbia Records"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Origin */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Country of Origin</Text>
+            <TextInput
+              style={styles.textInput}
+              value={origin}
+              onChangeText={setOrigin}
+              placeholder="e.g. USA, GBR"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Genre */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Genre</Text>
+            <TouchableOpacity
+              style={styles.selectRow}
+              onPress={() => setShowGenrePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.selectText, !genre && styles.placeholderText]}>
+                {genre || 'Select genre'}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
 
           {/* Value */}
@@ -133,14 +219,14 @@ export default function EditScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Edit Name */}
+          {/* Collection Date */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Edit Name</Text>
+            <Text style={styles.fieldLabel}>Collection Date</Text>
             <TextInput
               style={styles.textInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="Item name"
+              value={collectionDateStr}
+              onChangeText={setCollectionDateStr}
+              placeholder="MM/DD/YYYY"
               placeholderTextColor={colors.textTertiary}
               returnKeyType="next"
             />
@@ -178,29 +264,70 @@ export default function EditScreen() {
         <Pressable style={styles.pickerOverlay} onPress={() => setShowGradePicker(false)}>
           <View style={styles.pickerDropdown}>
             <Text style={styles.pickerTitle}>Select Grade</Text>
-            {gradeOptions.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[styles.pickerOption, grade === option && styles.pickerOptionActive]}
-                onPress={() => {
-                  setGrade(option);
-                  setShowGradePicker(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.pickerOptionText,
-                    grade === option && styles.pickerOptionTextActive,
-                  ]}
+            <ScrollView style={styles.pickerScroll}>
+              {gradeOptions.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.pickerOption, grade === option && styles.pickerOptionActive]}
+                  onPress={() => {
+                    setGrade(option);
+                    setShowGradePicker(false);
+                  }}
+                  activeOpacity={0.7}
                 >
-                  {option}
-                </Text>
-                {grade === option && (
-                  <Ionicons name="checkmark" size={18} color={colors.accentPrimary} />
-                )}
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      grade === option && styles.pickerOptionTextActive,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                  {grade === option && (
+                    <Ionicons name="checkmark" size={18} color={colors.accentPrimary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Genre Picker Modal */}
+      <Modal
+        visible={showGenrePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGenrePicker(false)}
+      >
+        <Pressable style={styles.pickerOverlay} onPress={() => setShowGenrePicker(false)}>
+          <View style={styles.pickerDropdown}>
+            <Text style={styles.pickerTitle}>Select Genre</Text>
+            <ScrollView style={styles.pickerScroll}>
+              {GENRE_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.pickerOption, genre === option && styles.pickerOptionActive]}
+                  onPress={() => {
+                    setGenre(option);
+                    setShowGenrePicker(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      genre === option && styles.pickerOptionTextActive,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                  {genre === option && (
+                    <Ionicons name="checkmark" size={18} color={colors.accentPrimary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </Pressable>
       </Modal>
@@ -301,7 +428,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     marginTop: spacing.xxl,
   },
-  // Grade picker modal
+  // Picker modal
   pickerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -313,6 +440,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.sm,
     overflow: 'hidden',
+    maxHeight: 400,
   },
   pickerTitle: {
     fontSize: 14,
@@ -322,6 +450,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+  },
+  pickerScroll: {
+    maxHeight: 340,
   },
   pickerOption: {
     flexDirection: 'row',

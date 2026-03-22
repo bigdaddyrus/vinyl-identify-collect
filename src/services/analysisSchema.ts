@@ -9,6 +9,10 @@ export const analysisResponseSchema = z.object({
   estimatedValueHigh: z.coerce.number().optional(),
   confidence: z.coerce.number().min(0).max(100).default(0),
   rarity: z.string().optional(),
+  label: z.string().optional(),
+  genre: z.string().optional(),
+  condition: z.string().optional(),
+  album_art_query: z.string().optional(),
   description: z.string().default('No description available.'),
   extendedDetails: z
     .array(

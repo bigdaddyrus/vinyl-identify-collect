@@ -9,7 +9,6 @@ import {
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -291,11 +290,6 @@ export default function ResultScreen() {
   const collection = useAppStore((state) => state.collection);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const isManualEntry = params.isManualEntry === 'true';
-
-  // Manual entry editable fields
-  const [manualName, setManualName] = useState('');
-  const [manualValue, setManualValue] = useState('');
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -306,11 +300,11 @@ export default function ResultScreen() {
   );
 
   // Parse result data from params
-  const result: AnalysisResult = params.resultData
+  const paramResult: AnalysisResult | null = params.resultData
     ? JSON.parse(params.resultData as string)
     : null;
 
-  if (!result) {
+  if (!paramResult) {
     return (
       <SafeAreaView style={styles.container}>
         <Text style={styles.errorText}>Error: No result data found</Text>
@@ -318,14 +312,18 @@ export default function ResultScreen() {
     );
   }
 
-  const isInCollection = collection.some((item) => item.id === result.id);
+  // For items already in collection, read live data from store
+  const storeItem = collection.find((i) => i.id === paramResult.id);
+  const isInCollection = !!storeItem;
+  const item = storeItem ?? paramResult;
+
   const { currencySymbol, upsellCta, showFeedback } = appConfig.result;
 
   // Build image array from either images[] or legacy imageUri
-  const imageList: string[] = result.images?.length
-    ? result.images
-    : result.imageUri
-      ? [result.imageUri]
+  const imageList: string[] = item.images?.length
+    ? item.images
+    : item.imageUri
+      ? [item.imageUri]
       : [];
 
   // ── Value formatting ──
@@ -340,29 +338,20 @@ export default function ResultScreen() {
   };
 
   const priceDisplay = () => {
-    if (isManualEntry) {
-      const val = parseFloat(manualValue) || 0;
-      return formatValue(val);
+    if (item.estimatedValueLow != null && item.estimatedValueHigh != null) {
+      return `${formatValue(item.estimatedValueLow)} – ${formatValue(item.estimatedValueHigh)}`;
     }
-    if (result.estimatedValueLow != null && result.estimatedValueHigh != null) {
-      return `${formatValue(result.estimatedValueLow)} – ${formatValue(result.estimatedValueHigh)}`;
-    }
-    return formatValue(result.estimatedValue);
+    return formatValue(item.estimatedValue);
   };
 
   // ── Actions ──
-  const handleAddToCollection = async () => {
+  const handleAddToCollection = () => {
     triggerButtonPress();
 
-    // Merge manual edits if in manual entry mode
-    const itemToSave: AnalysisResult = isManualEntry
-      ? {
-          ...result,
-          name: manualName || 'Untitled Record',
-          estimatedValue: parseFloat(manualValue) || 0,
-          confidence: 1, // Set to 1 so it doesn't trigger not-found on re-view
-        }
-      : result;
+    const itemToSave: AnalysisResult = {
+      ...item,
+      collectionDate: Date.now(),
+    };
 
     addToCollection(itemToSave);
     triggerCollectionAdd();
@@ -379,31 +368,21 @@ export default function ResultScreen() {
       }, 1500);
     }
 
-    Alert.alert(
-      'Added to Collection',
-      'This item has been added to your portfolio.',
-      [
-        {
-          text: 'View Portfolio',
-          onPress: () => router.push('/(tabs)/portfolio'),
-        },
-        { text: 'OK', style: 'cancel' },
-      ]
-    );
+    router.navigate('/(tabs)/(home)');
   };
 
   const handleRemove = () => {
     triggerButtonPress();
     Alert.alert(
       'Remove Item',
-      `Remove "${result.name}" from your collection?`,
+      `Remove "${item.name}" from your collection?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
           onPress: () => {
-            removeFromCollection(result.id);
+            removeFromCollection(item.id);
             router.back();
           },
         },
@@ -420,7 +399,7 @@ export default function ResultScreen() {
     triggerButtonPress();
     router.push({
       pathname: '/(tabs)/(scanner)/share',
-      params: { itemData: JSON.stringify(result) },
+      params: { itemData: JSON.stringify(item) },
     });
   };
 
@@ -432,7 +411,7 @@ export default function ResultScreen() {
   const handleHeaderKebab = () => {
     triggerButtonPress();
     Alert.alert(
-      result.name,
+      item.name,
       undefined,
       [
         ...(isInCollection
@@ -442,7 +421,7 @@ export default function ResultScreen() {
                 onPress: () => {
                   router.push({
                     pathname: '/(tabs)/(scanner)/edit',
-                    params: { itemData: JSON.stringify(result) },
+                    params: { itemData: JSON.stringify(item) },
                   });
                 },
               },
@@ -452,14 +431,14 @@ export default function ResultScreen() {
                 onPress: () => {
                   Alert.alert(
                     'Delete Item',
-                    `Remove "${result.name}" from your collection?`,
+                    `Remove "${item.name}" from your collection?`,
                     [
                       { text: 'Cancel', style: 'cancel' as const },
                       {
                         text: 'Delete',
                         style: 'destructive' as const,
                         onPress: () => {
-                          removeFromCollection(result.id);
+                          removeFromCollection(item.id);
                           router.back();
                         },
                       },
@@ -474,6 +453,13 @@ export default function ResultScreen() {
     );
   };
 
+  // Format collection date
+  const collectionDateStr = item.collectionDate
+    ? new Date(item.collectionDate).toLocaleDateString('en-US')
+    : item.createdAt
+      ? new Date(item.createdAt).toLocaleDateString('en-US')
+      : undefined;
+
   return (
     <View style={styles.container}>
       {/* ── Header Bar ── */}
@@ -482,9 +468,6 @@ export default function ResultScreen() {
           <TouchableOpacity style={styles.headerButton} onPress={handleBack} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
-          {isManualEntry && (
-            <Text style={styles.manualBadge}>Manual Entry</Text>
-          )}
           <TouchableOpacity style={styles.headerButton} onPress={handleHeaderKebab} activeOpacity={0.7}>
             <Ionicons name="ellipsis-vertical" size={20} color={colors.white} />
           </TouchableOpacity>
@@ -524,10 +507,10 @@ export default function ResultScreen() {
           )}
 
           {/* Confidence badge */}
-          {!isManualEntry && (
+          {item.confidence > 0 && (
             <View style={styles.confidenceBadge}>
               <Ionicons name="analytics" size={12} color={colors.white} />
-              <Text style={styles.confidenceText}>Confidence {result.confidence}%</Text>
+              <Text style={styles.confidenceText}>Confidence {item.confidence}%</Text>
             </View>
           )}
         </View>
@@ -535,32 +518,50 @@ export default function ResultScreen() {
         {/* Pagination dots */}
         <PaginationDots count={imageList.length} activeIndex={activeImageIndex} />
 
-        {/* ── Core Information ── */}
+        {/* ── Core Information (Read-Only) ── */}
         <View style={styles.infoSection}>
-          {isManualEntry ? (
-            <TextInput
-              style={styles.manualNameInput}
-              placeholder="Enter record name..."
-              placeholderTextColor={colors.textMuted}
-              value={manualName}
-              onChangeText={setManualName}
-              autoFocus
-            />
-          ) : (
-            <Text style={styles.itemName}>{result.name}</Text>
-          )}
+          {/* Name */}
+          <Text style={styles.itemName}>{item.name}</Text>
 
-          {/* Origin & Year chips */}
-          {!isManualEntry && (
-            <View style={styles.chipRow}>
+          {/* Genre, Label, Origin, Year chips */}
+          <View style={styles.chipRow}>
+            {item.genre && (
               <View style={styles.chip}>
-                <Ionicons name="flag" size={12} color={colors.iconMuted} />
-                <Text style={styles.chipText}>{getDisplayName(result.origin)}</Text>
+                <Ionicons name="musical-notes" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{item.genre}</Text>
               </View>
+            )}
+            {item.label && (
               <View style={styles.chip}>
-                <Ionicons name="calendar" size={12} color={colors.iconMuted} />
-                <Text style={styles.chipText}>{result.year}</Text>
+                <Ionicons name="disc" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{item.label}</Text>
               </View>
+            )}
+            <View style={styles.chip}>
+              <Ionicons name="flag" size={12} color={colors.iconMuted} />
+              <Text style={styles.chipText}>{getDisplayName(item.origin)}</Text>
+            </View>
+            <View style={styles.chip}>
+              <Ionicons name="calendar" size={12} color={colors.iconMuted} />
+              <Text style={styles.chipText}>{item.year}</Text>
+            </View>
+          </View>
+
+          {/* Key-value rows: Grade, Date */}
+          {(item.condition || collectionDateStr) && (
+            <View style={styles.detailRows}>
+              {item.condition && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailRowLabel}>Grade</Text>
+                  <Text style={styles.detailRowValue}>{item.condition}</Text>
+                </View>
+              )}
+              {collectionDateStr && isInCollection && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailRowLabel}>Date</Text>
+                  <Text style={styles.detailRowValue}>{collectionDateStr}</Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -569,29 +570,15 @@ export default function ResultScreen() {
             <Text style={styles.priceLabel}>
               {appConfig.result.labels.estimatedValue ?? 'Estimated Value'}
             </Text>
-            {isManualEntry ? (
-              <View style={styles.manualValueRow}>
-                <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
-                <TextInput
-                  style={styles.manualValueInput}
-                  placeholder="0"
-                  placeholderTextColor={colors.textMuted}
-                  value={manualValue}
-                  onChangeText={setManualValue}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            ) : (
-              <Text style={styles.priceValue}>{priceDisplay()}</Text>
-            )}
+            <Text style={styles.priceValue}>{priceDisplay()}</Text>
           </View>
 
           {/* Rarity Bar */}
-          {result.rarity && !isManualEntry && <RarityBar rarity={result.rarity} />}
+          {item.rarity && <RarityBar rarity={item.rarity} />}
         </View>
 
         {/* ── Upsell CTA ── */}
-        {upsellCta?.enabled && !isManualEntry && (
+        {upsellCta?.enabled && (
           <View style={styles.upsellSection}>
             <TouchableOpacity style={styles.upsellButton} activeOpacity={0.7}>
               {upsellCta.icon && (
@@ -609,23 +596,21 @@ export default function ResultScreen() {
         )}
 
         {/* ── Description ── */}
-        {!isManualEntry && (
-          <View style={styles.descriptionSection}>
-            <Text style={styles.descriptionText}>{result.description}</Text>
-          </View>
-        )}
+        <View style={styles.descriptionSection}>
+          <Text style={styles.descriptionText}>{item.description}</Text>
+        </View>
 
         {/* ── Detail Sections (flat, always visible) ── */}
-        {!isManualEntry && result.extendedDetails && result.extendedDetails.length > 0 && (
+        {item.extendedDetails && item.extendedDetails.length > 0 && (
           <View style={styles.detailsSection}>
-            {result.extendedDetails.map((section, index) => (
+            {item.extendedDetails.map((section, index) => (
               <DetailSection key={index} section={section} />
             ))}
           </View>
         )}
 
         {/* ── Feedback ── */}
-        {showFeedback && !isManualEntry && <FeedbackWidget />}
+        {showFeedback && <FeedbackWidget />}
 
         {/* Spacer for sticky bottom bar */}
         <View style={{ height: 100 }} />
@@ -640,11 +625,9 @@ export default function ResultScreen() {
               <TouchableOpacity style={styles.iconButton} onPress={handleScanNew} activeOpacity={0.7}>
                 <Ionicons name="camera" size={22} color={colors.white} />
               </TouchableOpacity>
-              {!isManualEntry && (
-                <TouchableOpacity style={styles.iconButton} onPress={handleShare} activeOpacity={0.7}>
-                  <Ionicons name="share-outline" size={22} color={colors.white} />
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={styles.iconButton} onPress={handleShare} activeOpacity={0.7}>
+                <Ionicons name="share-outline" size={22} color={colors.white} />
+              </TouchableOpacity>
             </View>
 
             {/* Primary CTA */}
@@ -659,7 +642,7 @@ export default function ResultScreen() {
                 </TouchableOpacity>
               ) : (
                 <GradientButton
-                  text={isManualEntry ? 'Save to Collection' : 'Add to Collection'}
+                  text="Save to Collection"
                   onPress={handleAddToCollection}
                   icon="add"
                 />
@@ -740,15 +723,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  manualBadge: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.accentPrimary,
-    backgroundColor: colors.accentSurface,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
   confidenceBadge: {
     position: 'absolute',
     bottom: spacing.md,
@@ -779,18 +753,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: spacing.sm,
   },
-  manualNameInput: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    letterSpacing: -0.3,
-    marginBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.accentPrimary,
-    paddingBottom: spacing.xs,
-  },
   chipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
@@ -807,6 +772,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: colors.textBody,
+  },
+  detailRows: {
+    marginBottom: spacing.lg,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  detailRowLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
+  detailRowValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textPrimary,
   },
   priceCard: {
     backgroundColor: colors.surfaceElevated,
@@ -829,27 +815,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'PlayfairDisplay_700Bold',
     color: colors.textPrimary,
-  },
-  manualValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  currencyPrefix: {
-    fontSize: 28,
-    fontWeight: '700',
-    fontFamily: 'PlayfairDisplay_700Bold',
-    color: colors.textPrimary,
-  },
-  manualValueInput: {
-    fontSize: 28,
-    fontWeight: '700',
-    fontFamily: 'PlayfairDisplay_700Bold',
-    color: colors.textPrimary,
-    minWidth: 80,
-    textAlign: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.accentPrimary,
-    paddingBottom: 2,
   },
 
   // ── Upsell CTA ──
@@ -910,7 +875,9 @@ const styles = StyleSheet.create({
     right: 0,
   },
   bottomBarInner: {
-    backgroundColor: colors.overlayBar,
+    backgroundColor: colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
     overflow: 'hidden',
   },
   bottomBarContent: {
