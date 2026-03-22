@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -27,6 +27,7 @@ const THUMB_SIZE = 40;
 export default function LoadingScreen() {
   const params = useLocalSearchParams<{ imageUri?: string; cartImages?: string }>();
   const incrementScanCount = useAppStore((state) => state.incrementScanCount);
+  const collection = useAppStore((state) => state.collection);
   const { resetCart } = useScanCart();
 
   // Parse cart images or fall back to legacy single imageUri
@@ -68,9 +69,7 @@ export default function LoadingScreen() {
     incrementScanCount();
   }, [incrementScanCount]);
 
-  const navigateToResult = useCallback((result: AnalysisResult) => {
-    if (navigatedRef.current) return;
-    navigatedRef.current = true;
+  const goToResult = useCallback((result: AnalysisResult) => {
     // Fill progress to 100%
     progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.cubic) });
     triggerPriceReveal();
@@ -95,6 +94,48 @@ export default function LoadingScreen() {
       });
     }, 500);
   }, [progressWidth, resetCart]);
+
+  const navigateToResult = useCallback((result: AnalysisResult) => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+
+    // Check for potential duplicates in collection
+    const nameLower = result.name.toLowerCase().trim();
+    const duplicate = collection.find((existing) => {
+      const existingName = existing.name.toLowerCase().trim();
+      const nameMatch = existingName === nameLower
+        || existingName.includes(nameLower)
+        || nameLower.includes(existingName);
+      const originMatch = existing.origin === result.origin;
+      const yearMatch = existing.year === result.year;
+      return nameMatch && originMatch && yearMatch;
+    });
+
+    if (duplicate) {
+      Alert.alert(
+        'Possible Duplicate',
+        `"${duplicate.name}" is already in your collection. Keep this scan?`,
+        [
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              resetCart();
+              router.back();
+            },
+          },
+          {
+            text: 'Continue',
+            onPress: () => goToResult(result),
+          },
+        ],
+        { cancelable: false }
+      );
+      return;
+    }
+
+    goToResult(result);
+  }, [collection, goToResult, resetCart]);
 
   useEffect(() => {
     if (error) return;

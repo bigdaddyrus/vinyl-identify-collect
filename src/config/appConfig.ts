@@ -325,10 +325,10 @@ export const appConfig: AppConfig = {
   "estimatedValueHigh": 0,
   "confidence": 0,
   "rarity": "Common",
-  "label": "Record Label (e.g. Columbia Records, Blue Note, Motown)",
+  "label": "Record label name WITHOUT the word 'Records' at the end (e.g. Columbia, Blue Note, Motown, Atlantic, Parlophone)",
   "genre": "Primary music genre",
   "condition": "Vinyl condition grade: Mint (M), Near Mint (NM), Very Good Plus (VG+), Very Good (VG), Good Plus (G+), Good (G), Fair (F), Poor (P)",
-  "album_art_query": "A highly specific search query for scraping the official album cover art (e.g. 'Pink Floyd - The Dark Side of the Moon - 1973')",
+  "albumArtQuery": "A highly specific search query for scraping the official album cover art (e.g. 'Pink Floyd - The Dark Side of the Moon - 1973')",
   "description": "Detailed analysis including pressing info, condition notes, label details, and notable features. Keep under 400 characters.",
   "extendedDetails": [
     {

@@ -8,7 +8,7 @@ import { appConfig } from '@/config/appConfig';
 /**
  * Exports the collection as a JSON file and opens the system share sheet.
  * Sanitizes image URIs to keep only file:// paths (no base64 blobs).
- * Injects `discogs_query` into each item for downstream scraping.
+ * Injects `discogsQuery` into each item for downstream scraping.
  */
 export async function exportCollectionAsJSON(items: AnalysisResult[]): Promise<void> {
   const sanitizeUri = (uri?: string): string | undefined => {
@@ -19,7 +19,7 @@ export async function exportCollectionAsJSON(items: AnalysisResult[]): Promise<v
 
   const sanitizedCollection = items.map((item) => ({
     ...item,
-    discogs_query: `${item.origin} - ${item.name} - ${item.year}`,
+    discogsQuery: `${item.origin} - ${item.name} - ${item.year}`,
     imageUri: sanitizeUri(item.imageUri),
     images: item.images?.map(sanitizeUri).filter(Boolean),
   }));

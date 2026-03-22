@@ -1,50 +1,78 @@
-# Welcome to your Expo app 👋
+# VinylCollect
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI-powered vinyl record identification and valuation app built with React Native (Expo).
 
-## Get started
+Snap a photo of any vinyl record and get instant identification, pressing details, and market valuation powered by Gemini Vision AI.
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- **AI Record Identification** — Snap front cover, back cover, and center label for expert-level analysis using Gemini Vision
+- **Market Valuation** — Get estimated value, price range, and rarity assessment
+- **Collection Management** — Track your entire vinyl library with total portfolio value
+- **Multi-Image Scanning** — Capture front, back, and label in a single scan session with interactive crop tool
+- **Geographic Insights** — See your collection's origin distribution on a world map
+- **Export Options** — Export collection as JSON (with Discogs query), image ZIP, or PDF report
+- **Offline-First** — Full local storage with optional Supabase cloud sync
+- **Search & Sort** — Find records by name, sort by value, date, or alphabetically
+- **Duplicate Detection** — Warns when a scanned record may already exist in your collection
 
-2. Start the app
+## Getting Started
 
-   ```bash
-   npx expo start
-   ```
+### Prerequisites
 
-In the output, you'll find options to open the app in a
+- Node.js 18+
+- Expo CLI (`npx expo`)
+- iOS Simulator or Android Emulator (or physical device)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### Installation
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Environment Variables
 
-## Learn more
+Create a `.env.local` file:
 
-To learn more about developing your project with Expo, look at the following resources:
+```
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Run
 
-## Join the community
+```bash
+npx expo start
+```
 
-Join our community of developers creating universal apps.
+## Tech Stack
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- **Framework**: React Native with Expo SDK 54
+- **Navigation**: Expo Router (file-based)
+- **State**: Zustand with AsyncStorage persistence
+- **AI**: Google Gemini Vision API
+- **Backend**: Supabase (auth, sync)
+- **Styling**: Config-driven theme system
+
+## Project Structure
+
+```
+app/                     # File-based routes (Expo Router)
+  (tabs)/                # Tab navigator
+    (home)/              # Home dashboard
+    (scanner)/           # Camera, crop, loading, result, edit
+    portfolio.tsx        # Collection with summary, list, sets tabs
+src/
+  config/appConfig.ts    # Single source of truth for all text, colors, AI prompts
+  types/index.ts         # TypeScript interfaces
+  store/useAppStore.ts   # Zustand store
+  services/              # Gemini Vision, Supabase auth, migration
+  components/            # Reusable UI components
+  utils/                 # Haptics, PDF export, rarity helpers
+  data/                  # Country coordinates & ISO normalization
+```
+
+## Configuration
+
+All app content, colors, and behavior is driven by `src/config/appConfig.ts`. To adapt this template for a different collectible vertical (coins, stamps, antiques), update the config and assets — no component code changes needed.

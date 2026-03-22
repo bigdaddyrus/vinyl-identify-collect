@@ -387,5 +387,6 @@ export interface AppStore {
   setProfileId: (profileId: string | null) => void;
   setSyncing: (isSyncing: boolean) => void;
   setLastSyncedAt: (timestamp: number) => void;
+  clearAllData: () => Promise<void>;
   resetApp: () => void; // For testing
 }

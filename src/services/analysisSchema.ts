@@ -12,7 +12,7 @@ export const analysisResponseSchema = z.object({
   label: z.string().optional(),
   genre: z.string().optional(),
   condition: z.string().optional(),
-  album_art_query: z.string().optional(),
+  albumArtQuery: z.string().optional(),
   description: z.string().default('No description available.'),
   extendedDetails: z
     .array(

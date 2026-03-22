@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,10 +25,13 @@ export default function PortfolioScreen() {
   const getRarestItem = useAppStore((state) => state.getRarestItem);
   const getOriginDistribution = useAppStore((state) => state.getOriginDistribution);
   const removeFromCollection = useAppStore((state) => state.removeFromCollection);
+  const clearAllData = useAppStore((state) => state.clearAllData);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState(appConfig.collection.tabs[0].key);
   const [sortBy, setSortBy] = useState('Highest Value');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showPageMenu, setShowPageMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const totalValue = getTotalPortfolioValue();
   const originCount = getUniqueOrigins();
@@ -37,6 +40,24 @@ export default function PortfolioScreen() {
   const rarestItem = getRarestItem();
   const originDistribution = getOriginDistribution();
   const spotlightLabels = appConfig.collection.spotlightLabels;
+
+  const handleDeleteAllData = () => {
+    setShowPageMenu(false);
+    Alert.alert(
+      'Delete All Data',
+      'This will permanently delete your entire collection and all stored images. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAllData();
+          },
+        },
+      ]
+    );
+  };
 
   const handleExportCollection = async () => {
     triggerButtonPress();
@@ -58,20 +79,27 @@ export default function PortfolioScreen() {
   };
 
   const getSortedCollection = () => {
-    const sorted = [...collection];
+    let filtered = [...collection];
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((item) => item.name.toLowerCase().includes(query));
+    }
+
     switch (sortBy) {
       case 'Highest Value':
-        return sorted.sort((a, b) => b.estimatedValue - a.estimatedValue);
+        return filtered.sort((a, b) => b.estimatedValue - a.estimatedValue);
       case 'Lowest Value':
-        return sorted.sort((a, b) => a.estimatedValue - b.estimatedValue);
+        return filtered.sort((a, b) => a.estimatedValue - b.estimatedValue);
       case 'Newest':
-        return sorted.sort((a, b) => b.createdAt - a.createdAt);
+        return filtered.sort((a, b) => b.createdAt - a.createdAt);
       case 'Oldest':
-        return sorted.sort((a, b) => a.createdAt - b.createdAt);
+        return filtered.sort((a, b) => a.createdAt - b.createdAt);
       case 'A-Z':
-        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+        return filtered.sort((a, b) => a.name.localeCompare(b.name));
       default:
-        return sorted;
+        return filtered;
     }
   };
 
@@ -135,6 +163,25 @@ export default function PortfolioScreen() {
 
   const renderAllTab = () => (
     <View style={styles.allContainer}>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={16} color={colors.textTertiary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search records..."
+          placeholderTextColor={colors.textTertiary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Sort/Filter Row */}
       {appConfig.collection.sortOptions && (
         <View style={styles.sortRow}>
@@ -225,6 +272,19 @@ export default function PortfolioScreen() {
         )}
         ListHeaderComponent={
           <>
+            {/* Page kebab menu */}
+            {collection.length > 0 && (
+              <View style={styles.pageMenuRow}>
+                <TouchableOpacity
+                  style={styles.pageKebab}
+                  onPress={() => setShowPageMenu(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Collection Header with Value — no separate title */}
             {collection.length > 0 && (
               <CollectionHeader
@@ -290,6 +350,27 @@ export default function PortfolioScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Page kebab menu modal */}
+      <Modal
+        visible={showPageMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPageMenu(false)}
+      >
+        <Pressable style={styles.sortOverlay} onPress={() => setShowPageMenu(false)}>
+          <View style={styles.sortDropdown}>
+            <TouchableOpacity
+              style={styles.pageMenuItem}
+              onPress={handleDeleteAllData}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
+              <Text style={styles.pageMenuItemTextDestructive}>Delete All Data</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -315,6 +396,24 @@ const styles = StyleSheet.create({
   // All tab
   allContainer: {
     marginBottom: spacing.sm,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.textPrimary,
+    padding: 0,
   },
   sortRow: {
     flexDirection: 'row',
@@ -423,6 +522,31 @@ const styles = StyleSheet.create({
   exportButtonText: {
     ...typography.body,
     color: colors.accentPrimary,
+    fontWeight: '600',
+  },
+  // Page kebab menu
+  pageMenuRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: spacing.xs,
+  },
+  pageKebab: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+  },
+  pageMenuItemTextDestructive: {
+    ...typography.body,
+    color: colors.error,
     fontWeight: '600',
   },
 });

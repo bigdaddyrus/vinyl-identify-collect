@@ -231,7 +231,7 @@ export async function analyzeImages(capturedImages: CapturedImage[]): Promise<An
     ...(validated.label && { label: validated.label }),
     ...(validated.genre && { genre: validated.genre }),
     ...(validated.condition && { condition: validated.condition }),
-    ...(validated.album_art_query && { albumArtQuery: validated.album_art_query }),
+    ...(validated.albumArtQuery && { albumArtQuery: validated.albumArtQuery }),
     ...(extendedDetails && { extendedDetails }),
     imageUri: (capturedImages.find((img) => img.type === 'front') ?? capturedImages[0])?.uri,
     images: capturedImages.map((img) => img.uri),

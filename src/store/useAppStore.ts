@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { File } from 'expo-file-system';
 import { AppStore, AnalysisResult, OriginDistribution } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { useState, useEffect } from 'react';
@@ -137,6 +138,25 @@ export const useAppStore = create<AppStore>()(
       setProfileId: (profileId: string | null) => set({ profileId }),
       setSyncing: (isSyncing: boolean) => set({ isSyncing }),
       setLastSyncedAt: (timestamp: number) => set({ lastSyncedAt: timestamp }),
+
+      clearAllData: async () => {
+        const { collection } = get();
+        // Delete all stored image files
+        for (const item of collection) {
+          const uris = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+          for (const uri of uris) {
+            if (uri && uri.startsWith('file://')) {
+              try {
+                const file = new File(uri);
+                file.delete();
+              } catch {
+                // Ignore deletion errors for missing files
+              }
+            }
+          }
+        }
+        set({ collection: [], scanCount: 0 });
+      },
 
       resetApp: () =>
         set({
