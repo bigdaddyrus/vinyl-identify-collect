@@ -52,7 +52,7 @@ export default function ScannerHomeScreen() {
   const [hasShownTips, setHasShownTips] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [zoom, setZoom] = useState(0); // 0 = 1x, normalized 0-1
-  const { cart, resetCart } = useScanCart();
+  const { cart, removeImage, resetCart } = useScanCart();
 
   // Show snap tips on first visit
   useEffect(() => {
@@ -244,8 +244,8 @@ export default function ScannerHomeScreen() {
       {/* Top Bar */}
       <SafeAreaView edges={['top']} style={styles.topBarSafe}>
         <View style={styles.topBar}>
-          {/* Close / Back */}
-          <TouchableOpacity style={styles.topBarIcon} onPress={() => router.back()} activeOpacity={0.7}>
+          {/* Close — clear cart and go home */}
+          <TouchableOpacity style={styles.topBarIcon} onPress={() => { resetCart(); router.navigate('/(tabs)/(home)'); }} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={colors.white} />
           </TouchableOpacity>
 
@@ -301,20 +301,30 @@ export default function ScannerHomeScreen() {
 
       {/* Bottom Controls */}
       <SafeAreaView edges={['bottom']} style={styles.bottomSafe}>
-        {/* Thumbnail strip */}
+        {/* Thumbnail strip — tap to remove */}
         {cart.images.length > 0 && (
           <View style={styles.thumbnailStrip}>
             {cart.images.map((img) => (
-              <View key={img.type} style={styles.thumbnailItem}>
-                <Image
-                  source={{ uri: img.uri }}
-                  style={styles.thumbnail}
-                  contentFit="cover"
-                />
+              <TouchableOpacity
+                key={img.type}
+                style={styles.thumbnailItem}
+                onPress={() => removeImage(img.type)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.thumbnailWrapper}>
+                  <Image
+                    source={{ uri: img.uri }}
+                    style={styles.thumbnail}
+                    contentFit="cover"
+                  />
+                  <View style={styles.thumbnailRemove}>
+                    <Ionicons name="close" size={10} color={colors.white} />
+                  </View>
+                </View>
                 <Text style={styles.thumbnailLabel}>
                   {img.type.charAt(0).toUpperCase() + img.type.slice(1)}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -504,12 +514,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  thumbnailWrapper: {
+    position: 'relative',
+  },
   thumbnail: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: colors.accentPrimary,
+  },
+  thumbnailRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,59,48,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   thumbnailLabel: {
     fontSize: 10,
