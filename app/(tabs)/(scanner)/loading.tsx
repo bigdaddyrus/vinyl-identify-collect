@@ -35,6 +35,9 @@ export default function LoadingScreen() {
       try {
         return JSON.parse(params.cartImages);
       } catch {
+        if (params.imageUri) {
+          return [{ type: 'front' as const, uri: params.imageUri }];
+        }
         return [];
       }
     }
