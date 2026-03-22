@@ -34,7 +34,11 @@ export async function exportCollectionAsJSON(items: AnalysisResult[]): Promise<v
   const fileName = `${appConfig.appSlug}-collection-${Date.now()}.json`;
   const filePath = `${Paths.cache.uri}/${fileName}`;
   const file = new File(filePath);
-  file.write(json);
+  try {
+    await file.write(json);
+  } catch (writeError) {
+    throw new Error(`Failed to write export file: ${String(writeError)}`);
+  }
 
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {

@@ -25,6 +25,8 @@ const HANDLE_HIT = 28; // touch target for corner handles
 const CORNER_VISUAL = 20;
 const CORNER_THICKNESS = 3;
 
+const VALID_IMAGE_TYPES: CapturedImage['type'][] = ['front', 'back', 'label'];
+
 export default function CropScreen() {
   const { imageUri, imageType } = useLocalSearchParams<{ imageUri: string; imageType: string }>();
   const { addImage } = useScanCart();
@@ -257,6 +259,12 @@ export default function CropScreen() {
   const performCrop = async () => {
     if (!imageUri || !imageSize) return;
 
+    // Validate imageType against the allowed set; fall back to 'front' if unknown
+    const safeType: CapturedImage['type'] =
+      imageType && VALID_IMAGE_TYPES.includes(imageType as CapturedImage['type'])
+        ? (imageType as CapturedImage['type'])
+        : 'front';
+
     setIsCropping(true);
     try {
       const { x: bx, y: by, w: bw, h: bh } = imageBounds;
@@ -288,13 +296,11 @@ export default function CropScreen() {
       );
 
       // Add cropped image to cart and return to scanner
-      const type = (imageType as CapturedImage['type']) || 'front';
-      addImage({ type, uri: result.uri });
+      addImage({ type: safeType, uri: result.uri });
       router.replace('/(tabs)/(scanner)');
     } catch {
       // If crop fails, add original image to cart
-      const type = (imageType as CapturedImage['type']) || 'front';
-      addImage({ type, uri: imageUri || '' });
+      addImage({ type: safeType, uri: imageUri || '' });
       router.replace('/(tabs)/(scanner)');
     } finally {
       setIsCropping(false);

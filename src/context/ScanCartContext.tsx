@@ -15,6 +15,14 @@ interface ScanCartContextValue {
 
 const ScanCartContext = createContext<ScanCartContextValue | null>(null);
 
+const TYPE_ORDER: CapturedImage['type'][] = ['front', 'back', 'label'];
+
+function sortByType(images: CapturedImage[]): CapturedImage[] {
+  return [...images].sort(
+    (a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+  );
+}
+
 function getNextStep(images: CapturedImage[]): ScanCart['currentStep'] {
   const types = new Set(images.map((img) => img.type));
   if (!types.has('front')) return 'front';
@@ -27,16 +35,16 @@ export function ScanCartProvider({ children }: { children: ReactNode }) {
 
   const addImage = useCallback((img: CapturedImage) => {
     setCart((prev) => {
-      // Replace if same type already exists
+      // Replace if same type already exists, then normalize to deterministic order
       const filtered = prev.images.filter((existing) => existing.type !== img.type);
-      const next = [...filtered, img];
+      const next = sortByType([...filtered, img]);
       return { images: next, currentStep: getNextStep(next) };
     });
   }, []);
 
   const removeImage = useCallback((type: CapturedImage['type']) => {
     setCart((prev) => {
-      const next = prev.images.filter((img) => img.type !== type);
+      const next = sortByType(prev.images.filter((img) => img.type !== type));
       return { images: next, currentStep: getNextStep(next) };
     });
   }, []);

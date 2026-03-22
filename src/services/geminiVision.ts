@@ -199,16 +199,20 @@ export async function analyzeImages(capturedImages: CapturedImage[]): Promise<An
   }
 
   // Validate with Zod (graceful defaults for partial responses)
-  const parseResult = analysisResponseSchema.safeParse(parsed);
+  let parseResult = analysisResponseSchema.safeParse(parsed);
 
   if (!parseResult.success) {
     console.warn('[Gemini] Zod validation issues:', parseResult.error.issues);
-    // Fall back to defaults for any fields that failed
+    // Merge fallback defaults first, then overlay parsed so valid values win;
+    // then re-run safeParse so Zod coercions are applied to the merged object.
     const fallback = analysisResponseSchema.parse({});
-    parsed = { ...fallback, ...parsed };
+    const merged = { ...fallback, ...parsed };
+    parseResult = analysisResponseSchema.safeParse(merged);
   }
 
-  const validated = parseResult.success ? parseResult.data : analysisResponseSchema.parse(parsed);
+  // If still invalid after merging, fall back to a fully-default object.
+  // analysisResponseSchema.parse({}) is safe here because every field has a .default().
+  const validated = parseResult.success ? parseResult.data : analysisResponseSchema.parse({});
 
   // Sanitize extended details (Zod validates shape but we also clean the content)
   const extendedDetails = sanitizeExtendedDetails(validated.extendedDetails);
@@ -225,7 +229,7 @@ export async function analyzeImages(capturedImages: CapturedImage[]): Promise<An
     description: validated.description,
     ...(validated.rarity && { rarity: validated.rarity }),
     ...(extendedDetails && { extendedDetails }),
-    imageUri: capturedImages[0]?.uri,
+    imageUri: (capturedImages.find((img) => img.type === 'front') ?? capturedImages[0])?.uri,
     images: capturedImages.map((img) => img.uri),
     createdAt: Date.now(),
   };
