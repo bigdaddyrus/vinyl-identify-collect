@@ -9,6 +9,7 @@ import {
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -290,6 +291,11 @@ export default function ResultScreen() {
   const collection = useAppStore((state) => state.collection);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const isManualEntry = params.isManualEntry === 'true';
+
+  // Manual entry editable fields
+  const [manualName, setManualName] = useState('');
+  const [manualValue, setManualValue] = useState('');
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -334,6 +340,10 @@ export default function ResultScreen() {
   };
 
   const priceDisplay = () => {
+    if (isManualEntry) {
+      const val = parseFloat(manualValue) || 0;
+      return formatValue(val);
+    }
     if (result.estimatedValueLow != null && result.estimatedValueHigh != null) {
       return `${formatValue(result.estimatedValueLow)} – ${formatValue(result.estimatedValueHigh)}`;
     }
@@ -343,12 +353,23 @@ export default function ResultScreen() {
   // ── Actions ──
   const handleAddToCollection = async () => {
     triggerButtonPress();
-    addToCollection(result);
+
+    // Merge manual edits if in manual entry mode
+    const itemToSave: AnalysisResult = isManualEntry
+      ? {
+          ...result,
+          name: manualName || 'Untitled Record',
+          estimatedValue: parseFloat(manualValue) || 0,
+          confidence: 1, // Set to 1 so it doesn't trigger not-found on re-view
+        }
+      : result;
+
+    addToCollection(itemToSave);
     triggerCollectionAdd();
 
     if (
       !hasTriggeredReview &&
-      result.estimatedValue > appConfig.aso.reviewThresholdValue
+      itemToSave.estimatedValue > appConfig.aso.reviewThresholdValue
     ) {
       setTimeout(async () => {
         const isAvailable = await StoreReview.isAvailableAsync();
@@ -461,6 +482,9 @@ export default function ResultScreen() {
           <TouchableOpacity style={styles.headerButton} onPress={handleBack} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
+          {isManualEntry && (
+            <Text style={styles.manualBadge}>Manual Entry</Text>
+          )}
           <TouchableOpacity style={styles.headerButton} onPress={handleHeaderKebab} activeOpacity={0.7}>
             <Ionicons name="ellipsis-vertical" size={20} color={colors.white} />
           </TouchableOpacity>
@@ -500,10 +524,12 @@ export default function ResultScreen() {
           )}
 
           {/* Confidence badge */}
-          <View style={styles.confidenceBadge}>
-            <Ionicons name="analytics" size={12} color={colors.white} />
-            <Text style={styles.confidenceText}>Confidence {result.confidence}%</Text>
-          </View>
+          {!isManualEntry && (
+            <View style={styles.confidenceBadge}>
+              <Ionicons name="analytics" size={12} color={colors.white} />
+              <Text style={styles.confidenceText}>Confidence {result.confidence}%</Text>
+            </View>
+          )}
         </View>
 
         {/* Pagination dots */}
@@ -511,34 +537,61 @@ export default function ResultScreen() {
 
         {/* ── Core Information ── */}
         <View style={styles.infoSection}>
-          <Text style={styles.itemName}>{result.name}</Text>
+          {isManualEntry ? (
+            <TextInput
+              style={styles.manualNameInput}
+              placeholder="Enter record name..."
+              placeholderTextColor={colors.textMuted}
+              value={manualName}
+              onChangeText={setManualName}
+              autoFocus
+            />
+          ) : (
+            <Text style={styles.itemName}>{result.name}</Text>
+          )}
 
           {/* Origin & Year chips */}
-          <View style={styles.chipRow}>
-            <View style={styles.chip}>
-              <Ionicons name="flag" size={12} color={colors.iconMuted} />
-              <Text style={styles.chipText}>{getDisplayName(result.origin)}</Text>
+          {!isManualEntry && (
+            <View style={styles.chipRow}>
+              <View style={styles.chip}>
+                <Ionicons name="flag" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{getDisplayName(result.origin)}</Text>
+              </View>
+              <View style={styles.chip}>
+                <Ionicons name="calendar" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{result.year}</Text>
+              </View>
             </View>
-            <View style={styles.chip}>
-              <Ionicons name="calendar" size={12} color={colors.iconMuted} />
-              <Text style={styles.chipText}>{result.year}</Text>
-            </View>
-          </View>
+          )}
 
           {/* Estimated Value */}
           <View style={styles.priceCard}>
             <Text style={styles.priceLabel}>
               {appConfig.result.labels.estimatedValue ?? 'Estimated Value'}
             </Text>
-            <Text style={styles.priceValue}>{priceDisplay()}</Text>
+            {isManualEntry ? (
+              <View style={styles.manualValueRow}>
+                <Text style={styles.currencyPrefix}>{currencySymbol}</Text>
+                <TextInput
+                  style={styles.manualValueInput}
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                  value={manualValue}
+                  onChangeText={setManualValue}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            ) : (
+              <Text style={styles.priceValue}>{priceDisplay()}</Text>
+            )}
           </View>
 
           {/* Rarity Bar */}
-          {result.rarity && <RarityBar rarity={result.rarity} />}
+          {result.rarity && !isManualEntry && <RarityBar rarity={result.rarity} />}
         </View>
 
         {/* ── Upsell CTA ── */}
-        {upsellCta?.enabled && (
+        {upsellCta?.enabled && !isManualEntry && (
           <View style={styles.upsellSection}>
             <TouchableOpacity style={styles.upsellButton} activeOpacity={0.7}>
               {upsellCta.icon && (
@@ -556,12 +609,14 @@ export default function ResultScreen() {
         )}
 
         {/* ── Description ── */}
-        <View style={styles.descriptionSection}>
-          <Text style={styles.descriptionText}>{result.description}</Text>
-        </View>
+        {!isManualEntry && (
+          <View style={styles.descriptionSection}>
+            <Text style={styles.descriptionText}>{result.description}</Text>
+          </View>
+        )}
 
         {/* ── Detail Sections (flat, always visible) ── */}
-        {result.extendedDetails && result.extendedDetails.length > 0 && (
+        {!isManualEntry && result.extendedDetails && result.extendedDetails.length > 0 && (
           <View style={styles.detailsSection}>
             {result.extendedDetails.map((section, index) => (
               <DetailSection key={index} section={section} />
@@ -570,7 +625,7 @@ export default function ResultScreen() {
         )}
 
         {/* ── Feedback ── */}
-        {showFeedback && <FeedbackWidget />}
+        {showFeedback && !isManualEntry && <FeedbackWidget />}
 
         {/* Spacer for sticky bottom bar */}
         <View style={{ height: 100 }} />
@@ -585,9 +640,11 @@ export default function ResultScreen() {
               <TouchableOpacity style={styles.iconButton} onPress={handleScanNew} activeOpacity={0.7}>
                 <Ionicons name="camera" size={22} color={colors.white} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={handleShare} activeOpacity={0.7}>
-                <Ionicons name="share-outline" size={22} color={colors.white} />
-              </TouchableOpacity>
+              {!isManualEntry && (
+                <TouchableOpacity style={styles.iconButton} onPress={handleShare} activeOpacity={0.7}>
+                  <Ionicons name="share-outline" size={22} color={colors.white} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Primary CTA */}
@@ -602,7 +659,7 @@ export default function ResultScreen() {
                 </TouchableOpacity>
               ) : (
                 <GradientButton
-                  text="Add to Collection"
+                  text={isManualEntry ? 'Save to Collection' : 'Add to Collection'}
                   onPress={handleAddToCollection}
                   icon="add"
                 />
@@ -683,6 +740,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  manualBadge: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+    backgroundColor: colors.accentSurface,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
   confidenceBadge: {
     position: 'absolute',
     bottom: spacing.md,
@@ -712,6 +778,16 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.3,
     marginBottom: spacing.sm,
+  },
+  manualNameInput: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+    marginBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.accentPrimary,
+    paddingBottom: spacing.xs,
   },
   chipRow: {
     flexDirection: 'row',
@@ -753,6 +829,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'PlayfairDisplay_700Bold',
     color: colors.textPrimary,
+  },
+  manualValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currencyPrefix: {
+    fontSize: 28,
+    fontWeight: '700',
+    fontFamily: 'PlayfairDisplay_700Bold',
+    color: colors.textPrimary,
+  },
+  manualValueInput: {
+    fontSize: 28,
+    fontWeight: '700',
+    fontFamily: 'PlayfairDisplay_700Bold',
+    color: colors.textPrimary,
+    minWidth: 80,
+    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.accentPrimary,
+    paddingBottom: 2,
   },
 
   // ── Upsell CTA ──

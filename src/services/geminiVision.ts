@@ -1,8 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
-import { AnalysisResult, ExtendedDetailSection } from '@/types';
+import { AnalysisResult, CapturedImage, ExtendedDetailSection } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { normalizeOrigin } from '@/data/countryCoordinates';
+import { analysisResponseSchema } from './analysisSchema';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -87,10 +88,11 @@ function stripMarkdownFences(text: string): string {
 }
 
 /**
- * Analyzes an image using Google Gemini Vision API.
+ * Analyzes multiple images using Google Gemini Vision API.
+ * Accepts a cart of captured images (front, back, label).
  * Returns an AnalysisResult with generated ID and timestamp.
  */
-export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
+export async function analyzeImages(capturedImages: CapturedImage[]): Promise<AnalysisResult> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
@@ -101,18 +103,26 @@ export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
 
   const { model, systemPrompt, maxTokens, temperature } = appConfig.ai;
 
-  console.log('[Gemini] Starting image analysis...');
+  console.log('[Gemini] Starting multi-image analysis...');
   console.log('[Gemini] Model:', model);
-  console.log('[Gemini] Image URI:', imageUri);
+  console.log('[Gemini] Images:', capturedImages.map((img) => `${img.type}: ${img.uri}`));
 
-  // Read image as base64
-  const base64 = await readAsStringAsync(imageUri, {
-    encoding: EncodingType.Base64,
-  });
-
-  const mimeType = getMimeType(imageUri);
-  console.log('[Gemini] MIME type:', mimeType);
-  console.log('[Gemini] Base64 length:', base64.length);
+  // Read all images as base64 in parallel
+  const imageParts = await Promise.all(
+    capturedImages.map(async (img) => {
+      const base64 = await readAsStringAsync(img.uri, {
+        encoding: EncodingType.Base64,
+      });
+      const mimeType = getMimeType(img.uri);
+      console.log(`[Gemini] ${img.type} - MIME: ${mimeType}, Base64 length: ${base64.length}`);
+      return {
+        inlineData: {
+          mimeType,
+          data: base64,
+        },
+      };
+    })
+  );
 
   // Initialize Gemini client
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -124,16 +134,11 @@ export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
     },
   });
 
-  // Call API with timeout
-  console.log('[Gemini] Sending request to API...');
+  // Build content: text prompt + all image parts
+  console.log('[Gemini] Sending request to API with', imageParts.length, 'images...');
   const apiCall = genModel.generateContent([
     { text: systemPrompt },
-    {
-      inlineData: {
-        mimeType,
-        data: base64,
-      },
-    },
+    ...imageParts,
   ]);
 
   const timeoutPromise = new Promise<never>((_, reject) =>
@@ -146,7 +151,6 @@ export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
 
   const candidate = response.response.candidates?.[0];
   if (!candidate || !candidate.content?.parts?.length) {
-    // Check for content safety block
     const blockReason = response.response.promptFeedback?.blockReason;
     console.error('[Gemini] No valid candidate. Block reason:', blockReason);
     console.error('[Gemini] Full response:', JSON.stringify(response.response, null, 2));
@@ -194,35 +198,39 @@ export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
     );
   }
 
-  // Validate required fields
-  const requiredFields = appConfig.ai.responseSchema.fields;
-  for (const field of requiredFields) {
-    if (!(field in parsed)) {
-      console.error('[Gemini] Missing required field:', field);
-      console.error('[Gemini] Available fields:', Object.keys(parsed));
-      throw new Error(`AI response missing required field: ${field}`);
-    }
+  // Validate with Zod (graceful defaults for partial responses)
+  let parseResult = analysisResponseSchema.safeParse(parsed);
+
+  if (!parseResult.success) {
+    console.warn('[Gemini] Zod validation issues:', parseResult.error.issues);
+    // Merge fallback defaults first, then overlay parsed so valid values win;
+    // then re-run safeParse so Zod coercions are applied to the merged object.
+    const fallback = analysisResponseSchema.parse({});
+    const merged = { ...fallback, ...parsed };
+    parseResult = analysisResponseSchema.safeParse(merged);
   }
 
-  // Parse optional extended fields
-  const estimatedValueLow = parsed.estimatedValueLow != null ? Number(parsed.estimatedValueLow) : undefined;
-  const estimatedValueHigh = parsed.estimatedValueHigh != null ? Number(parsed.estimatedValueHigh) : undefined;
-  const rarity = parsed.rarity ? String(parsed.rarity) : undefined;
-  const extendedDetails = sanitizeExtendedDetails(parsed.extendedDetails);
+  // If still invalid after merging, fall back to a fully-default object.
+  // analysisResponseSchema.parse({}) is safe here because every field has a .default().
+  const validated = parseResult.success ? parseResult.data : analysisResponseSchema.parse({});
+
+  // Sanitize extended details (Zod validates shape but we also clean the content)
+  const extendedDetails = sanitizeExtendedDetails(validated.extendedDetails);
 
   const result: AnalysisResult = {
     id: `scan-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-    name: String(parsed.name),
-    origin: normalizeOrigin(String(parsed.origin)),
-    year: String(parsed.year),
-    estimatedValue: Number(parsed.estimatedValue) || 0,
-    ...(estimatedValueLow != null && estimatedValueLow > 0 && { estimatedValueLow }),
-    ...(estimatedValueHigh != null && estimatedValueHigh > 0 && { estimatedValueHigh }),
-    confidence: Math.min(100, Math.max(0, Math.round(Number(parsed.confidence) || 0))),
-    description: String(parsed.description),
-    ...(rarity && { rarity }),
+    name: validated.name,
+    origin: normalizeOrigin(validated.origin),
+    year: validated.year,
+    estimatedValue: validated.estimatedValue || 0,
+    ...(validated.estimatedValueLow != null && validated.estimatedValueLow > 0 && { estimatedValueLow: validated.estimatedValueLow }),
+    ...(validated.estimatedValueHigh != null && validated.estimatedValueHigh > 0 && { estimatedValueHigh: validated.estimatedValueHigh }),
+    confidence: Math.min(100, Math.max(0, Math.round(validated.confidence || 0))),
+    description: validated.description,
+    ...(validated.rarity && { rarity: validated.rarity }),
     ...(extendedDetails && { extendedDetails }),
-    imageUri,
+    imageUri: (capturedImages.find((img) => img.type === 'front') ?? capturedImages[0])?.uri,
+    images: capturedImages.map((img) => img.uri),
     createdAt: Date.now(),
   };
 
@@ -233,4 +241,11 @@ export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
   });
 
   return result;
+}
+
+/**
+ * Backward-compatible single-image analysis wrapper.
+ */
+export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
+  return analyzeImages([{ type: 'front', uri: imageUri }]);
 }
