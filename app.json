@@ -17,7 +17,9 @@
     },
     "android": {
       "package": "com.vinylcollect.app",
-      "permissions": ["CAMERA"],
+      "permissions": [
+        "CAMERA"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -50,7 +52,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "react-native-document-scanner-plugin"
     ],
     "experiments": {
       "typedRoutes": true,

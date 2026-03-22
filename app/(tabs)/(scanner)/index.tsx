@@ -14,6 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import DocumentScanner from 'react-native-document-scanner-plugin';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
@@ -52,7 +53,7 @@ export default function ScannerHomeScreen() {
   const [hasShownTips, setHasShownTips] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [zoom, setZoom] = useState(0); // 0 = 1x, normalized 0-1
-  const { cart, resetCart } = useScanCart();
+  const { cart, addImage, resetCart } = useScanCart();
 
   // Show snap tips on first visit
   useEffect(() => {
@@ -99,16 +100,18 @@ export default function ScannerHomeScreen() {
   const handleCapture = async () => {
     triggerButtonPress();
 
-    if (!cameraRef.current) return;
-
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
-      if (photo) {
+      const { scannedImages, status } = await DocumentScanner.scanDocument({
+        maxNumDocuments: 1,
+        croppedImageQuality: 80,
+      });
+
+      if (status === 'success' && scannedImages && scannedImages.length > 0) {
         const imageType = cart.currentStep === 'ready' ? 'label' : cart.currentStep;
-        goToCrop(photo.uri, imageType);
+        addImage({ type: imageType, uri: scannedImages[0] });
       }
     } catch {
-      Alert.alert('Capture Failed', 'Unable to take photo. Please try again.');
+      Alert.alert('Scan Failed', 'Unable to scan document. Please try again.');
     }
   };
 
@@ -122,14 +125,18 @@ export default function ScannerHomeScreen() {
 
   const handleScanLabelFromCamera = async () => {
     triggerButtonPress();
-    if (!cameraRef.current) return;
+
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
-      if (photo) {
-        goToCrop(photo.uri, 'label');
+      const { scannedImages, status } = await DocumentScanner.scanDocument({
+        maxNumDocuments: 1,
+        croppedImageQuality: 80,
+      });
+
+      if (status === 'success' && scannedImages && scannedImages.length > 0) {
+        addImage({ type: 'label', uri: scannedImages[0] });
       }
     } catch {
-      Alert.alert('Capture Failed', 'Unable to take photo. Please try again.');
+      Alert.alert('Scan Failed', 'Unable to scan document. Please try again.');
     }
   };
 
