@@ -192,7 +192,8 @@ export default function LoadingScreen() {
   };
 
   const handleForceSave = () => {
-    // Create skeleton result with images from cart
+    // Prefer the front cover as the primary image; fall back to first available
+    const primaryImage = parsedCart.find((img) => img.type === 'front') ?? parsedCart[0];
     const skeletonResult: AnalysisResult = {
       id: `manual-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       name: '',
@@ -201,7 +202,7 @@ export default function LoadingScreen() {
       estimatedValue: 0,
       confidence: 0,
       description: 'Manually saved item.',
-      imageUri: parsedCart[0]?.uri,
+      imageUri: primaryImage?.uri,
       images: parsedCart.map((img) => img.uri),
       createdAt: Date.now(),
     };
