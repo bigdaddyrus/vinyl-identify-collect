@@ -290,6 +290,7 @@ export default function ResultScreen() {
   const collection = useAppStore((state) => state.collection);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [pendingSave, setPendingSave] = useState(false);
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -348,17 +349,22 @@ export default function ResultScreen() {
   const handleAddToCollection = () => {
     triggerButtonPress();
 
-    const itemToSave: AnalysisResult = {
-      ...item,
-      collectionDate: Date.now(),
-    };
+    if (pendingSave) {
+      // Already saved temporarily for editing — just confirm and go home
+      setPendingSave(false);
+    } else {
+      const itemToSave: AnalysisResult = {
+        ...item,
+        collectionDate: Date.now(),
+      };
+      addToCollection(itemToSave);
+    }
 
-    addToCollection(itemToSave);
     triggerCollectionAdd();
 
     if (
       !hasTriggeredReview &&
-      itemToSave.estimatedValue > appConfig.aso.reviewThresholdValue
+      item.estimatedValue > appConfig.aso.reviewThresholdValue
     ) {
       setTimeout(async () => {
         const isAvailable = await StoreReview.isAvailableAsync();
@@ -405,52 +411,58 @@ export default function ResultScreen() {
 
   const handleBack = () => {
     triggerButtonPress();
+    if (pendingSave) {
+      // Remove temporarily saved item if user backs out without saving
+      removeFromCollection(item.id);
+    }
     router.back();
+  };
+
+  const handleEdit = () => {
+    triggerButtonPress();
+    if (!isInCollection) {
+      // Temporarily save so the edit modal can update it via store
+      addToCollection({ ...item, collectionDate: Date.now() });
+      setPendingSave(true);
+    }
+    router.push({
+      pathname: '/(tabs)/(scanner)/edit',
+      params: { itemData: JSON.stringify(item) },
+    });
   };
 
   const handleHeaderKebab = () => {
     triggerButtonPress();
-    Alert.alert(
-      item.name,
-      undefined,
-      [
-        ...(isInCollection
-          ? [
+    const options: { text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }[] = [
+      { text: 'Edit', onPress: handleEdit },
+    ];
+
+    if (isInCollection && !pendingSave) {
+      options.push({
+        text: 'Delete from Collection',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            'Delete Item',
+            `Remove "${item.name}" from your collection?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
               {
-                text: 'Edit',
+                text: 'Delete',
+                style: 'destructive',
                 onPress: () => {
-                  router.push({
-                    pathname: '/(tabs)/(scanner)/edit',
-                    params: { itemData: JSON.stringify(item) },
-                  });
-                },
-              },
-              {
-                text: 'Delete from Collection',
-                style: 'destructive' as const,
-                onPress: () => {
-                  Alert.alert(
-                    'Delete Item',
-                    `Remove "${item.name}" from your collection?`,
-                    [
-                      { text: 'Cancel', style: 'cancel' as const },
-                      {
-                        text: 'Delete',
-                        style: 'destructive' as const,
-                        onPress: () => {
-                          removeFromCollection(item.id);
-                          router.back();
-                        },
-                      },
-                    ]
-                  );
+                  removeFromCollection(item.id);
+                  router.back();
                 },
               },
             ]
-          : []),
-        { text: 'Cancel', style: 'cancel' as const },
-      ]
-    );
+          );
+        },
+      });
+    }
+
+    options.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert(item.name, undefined, options);
   };
 
   // Format collection date
@@ -632,7 +644,7 @@ export default function ResultScreen() {
 
             {/* Primary CTA */}
             <View style={styles.primaryAction}>
-              {isInCollection ? (
+              {isInCollection && !pendingSave ? (
                 <TouchableOpacity
                   style={styles.removeButton}
                   onPress={handleRemove}

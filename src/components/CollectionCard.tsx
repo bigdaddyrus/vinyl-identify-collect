@@ -3,7 +3,13 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { AnalysisResult } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
-import { getDisplayName } from '@/data/countryCoordinates';
+
+/** Extract the short abbreviation from a condition string like "Near Mint (NM)" → "NM" */
+function conditionShort(condition?: string): string | undefined {
+  if (!condition) return undefined;
+  const match = condition.match(/\(([^)]+)\)/);
+  return match ? match[1] : condition;
+}
 
 interface Props {
   item: AnalysisResult;
@@ -44,9 +50,8 @@ export function CollectionCard({ item, onPress, onKebabPress }: Props) {
         <Text style={styles.metadata} numberOfLines={1}>
           {[
             item.genre,
-            getDisplayName(item.origin),
-            item.year,
-            item.condition,
+            conditionShort(item.condition),
+            item.origin,
           ].filter(Boolean).join(' · ')}
         </Text>
       </View>

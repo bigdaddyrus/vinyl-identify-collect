@@ -1,4 +1,4 @@
-import { Tabs, Redirect } from 'expo-router';
+import { Tabs, Redirect, router } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,6 +62,13 @@ export default function TabLayout() {
             </View>
           ),
           tabBarLabel: () => null, // Hide label for center button
+        }}
+        listeners={{
+          tabPress: (e) => {
+            // Always reset to the scanner index screen
+            e.preventDefault();
+            router.replace('/(tabs)/(scanner)');
+          },
         }}
       />
       <Tabs.Screen
