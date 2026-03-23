@@ -335,6 +335,8 @@ export interface AnalysisResult {
   condition?: string; // e.g. 'Mint', 'AU', 'VF', 'F', 'VG', 'G', 'Fair', 'Poor', 'Uncertain'
   barcode?: string; // EAN/UPC barcode from physical record sleeve
   vibePairing?: string; // Evocative listening recommendation (e.g. "Late-night drive with the windows down")
+  foodPairing?: string; // Food pairing suggestion (e.g. "Slow-smoked brisket with cornbread")
+  drinkPairing?: string; // Drink pairing suggestion (e.g. "Bourbon old fashioned")
   albumArtQuery?: string; // Search query for scraping official album art (e.g. "Artist - Album - Year")
   collectionDate?: number; // Editable collection date (defaults to createdAt)
   notes?: string; // User-editable notes

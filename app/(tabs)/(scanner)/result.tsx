@@ -623,6 +623,34 @@ export default function ResultScreen() {
           </View>
         )}
 
+        {/* ── Food & Drink Pairing ── */}
+        {(item.foodPairing || item.drinkPairing) && (
+          <View style={styles.pairingSection}>
+            {item.foodPairing && (
+              <View style={styles.pairingRow}>
+                <View style={styles.pairingIconBox}>
+                  <Ionicons name="restaurant" size={16} color={colors.accentPrimary} />
+                </View>
+                <View style={styles.pairingContent}>
+                  <Text style={styles.pairingLabel}>Food</Text>
+                  <Text style={styles.pairingValue}>{item.foodPairing}</Text>
+                </View>
+              </View>
+            )}
+            {item.drinkPairing && (
+              <View style={styles.pairingRow}>
+                <View style={styles.pairingIconBox}>
+                  <Ionicons name="wine" size={16} color={colors.accentPrimary} />
+                </View>
+                <View style={styles.pairingContent}>
+                  <Text style={styles.pairingLabel}>Drink</Text>
+                  <Text style={styles.pairingValue}>{item.drinkPairing}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* ── Description ── */}
         <View style={styles.descriptionSection}>
           <Text style={styles.descriptionText}>{item.description}</Text>
@@ -898,6 +926,49 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontWeight: '500',
     color: colors.accentPrimary,
+    lineHeight: 20,
+  },
+
+  // ── Food & Drink Pairing ──
+  pairingSection: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  pairingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  pairingIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.accentHighlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pairingContent: {
+    flex: 1,
+  },
+  pairingLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  pairingValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textPrimary,
     lineHeight: 20,
   },
 

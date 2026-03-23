@@ -14,6 +14,8 @@ export const analysisResponseSchema = z.object({
   condition: z.string().optional(),
   barcode: z.string().optional(),
   vibePairing: z.string().optional(),
+  foodPairing: z.string().optional(),
+  drinkPairing: z.string().optional(),
   albumArtQuery: z.string().optional(),
   description: z.string().default('No description available.'),
   extendedDetails: z

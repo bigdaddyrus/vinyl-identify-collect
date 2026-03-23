@@ -88,8 +88,10 @@ function stripMarkdownFences(text: string): string {
   return cleaned.trim();
 }
 
-const VIBE_PAIRING_INSTRUCTION = `
-"vibePairing": "A short, evocative recommendation of when/where/how to listen to this record (e.g. 'Late-night drive with the windows down', 'Sunday morning coffee on the porch'). Max 100 characters."`;
+const PAIRING_INSTRUCTIONS = `
+"vibePairing": "A short, evocative recommendation of when/where/how to listen to this record (e.g. 'Late-night drive with the windows down', 'Sunday morning coffee on the porch'). Max 100 characters.",
+"foodPairing": "A specific food that pairs with the mood/genre/era of this record (e.g. 'Slow-smoked brisket with cornbread', 'Fresh oysters with mignonette'). Max 100 characters.",
+"drinkPairing": "A specific drink that pairs with the mood/genre/era of this record (e.g. 'Bourbon old fashioned', 'Espresso martini', 'Chilled sake'). Max 100 characters."`;
 
 function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string): string {
   const tracklistStr = discogsData.tracklist.length > 0
@@ -107,19 +109,19 @@ Country: ${discogsData.country}
 Formats: ${discogsData.formats.join(', ')}
 Tracklist: ${tracklistStr}
 
-Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write a vibePairing.
+Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write pairing recommendations.
 
 ${basePrompt}
 
-IMPORTANT: Also include this field in your JSON response:
-${VIBE_PAIRING_INSTRUCTION}`;
+IMPORTANT: Also include these fields in your JSON response:
+${PAIRING_INSTRUCTIONS}`;
 }
 
-function addVibePairingToPrompt(basePrompt: string): string {
+function addPairingsToPrompt(basePrompt: string): string {
   return `${basePrompt}
 
-IMPORTANT: Also include this field in your JSON response:
-${VIBE_PAIRING_INSTRUCTION}`;
+IMPORTANT: Also include these fields in your JSON response:
+${PAIRING_INSTRUCTIONS}`;
 }
 
 /**
@@ -177,7 +179,7 @@ export async function analyzeImages(
   // Build the prompt: enrich with Discogs data (Scenario A) or add vibe pairing only (Scenario B)
   const prompt = discogsData
     ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt)
-    : addVibePairingToPrompt(systemPrompt);
+    : addPairingsToPrompt(systemPrompt);
 
   console.log('[Gemini] Prompt scenario:', discogsData ? 'A (Discogs-enriched)' : 'B (visual-only)');
 
@@ -279,6 +281,8 @@ export async function analyzeImages(
     ...(validated.genre && { genre: validated.genre }),
     ...(validated.condition && { condition: validated.condition }),
     ...(validated.vibePairing && { vibePairing: validated.vibePairing }),
+    ...(validated.foodPairing && { foodPairing: validated.foodPairing }),
+    ...(validated.drinkPairing && { drinkPairing: validated.drinkPairing }),
     ...(barcode && { barcode }),
     ...(validated.albumArtQuery && { albumArtQuery: validated.albumArtQuery }),
     ...(extendedDetails && { extendedDetails }),
