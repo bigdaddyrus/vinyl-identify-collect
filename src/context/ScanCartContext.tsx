@@ -3,13 +3,15 @@ import { CapturedImage, ScanCart } from '@/types';
 
 const INITIAL_CART: ScanCart = {
   images: [],
-  currentStep: 'front',
+  currentStep: 'barcode',
 };
 
 interface ScanCartContextValue {
   cart: ScanCart;
   addImage: (img: CapturedImage) => void;
   removeImage: (type: CapturedImage['type']) => void;
+  setBarcode: (code: string) => void;
+  skipBarcode: () => void;
   resetCart: () => void;
 }
 
@@ -49,12 +51,20 @@ export function ScanCartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setBarcode = useCallback((code: string) => {
+    setCart((prev) => ({ ...prev, barcode: code, currentStep: 'front' }));
+  }, []);
+
+  const skipBarcode = useCallback(() => {
+    setCart((prev) => ({ ...prev, currentStep: 'front' }));
+  }, []);
+
   const resetCart = useCallback(() => {
     setCart(INITIAL_CART);
   }, []);
 
   return (
-    <ScanCartContext.Provider value={{ cart, addImage, removeImage, resetCart }}>
+    <ScanCartContext.Provider value={{ cart, addImage, removeImage, setBarcode, skipBarcode, resetCart }}>
       {children}
     </ScanCartContext.Provider>
   );

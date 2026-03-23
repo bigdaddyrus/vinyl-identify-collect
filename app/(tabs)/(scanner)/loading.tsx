@@ -16,6 +16,8 @@ import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerPriceReveal } from '@/utils/haptics';
 import { getRandomMockResult } from '@/mock/analysisData';
 import { analyzeImages } from '@/services/geminiVision';
+import { searchByBarcode } from '@/services/discogs';
+import type { DiscogsResult } from '@/services/discogs';
 import { useAppStore } from '@/store/useAppStore';
 import { useScanCart } from '@/context/ScanCartContext';
 import { AnalysisResult, CapturedImage } from '@/types';
@@ -25,7 +27,7 @@ type StepStatus = 'pending' | 'active' | 'complete';
 const THUMB_SIZE = 40;
 
 export default function LoadingScreen() {
-  const params = useLocalSearchParams<{ imageUri?: string; cartImages?: string }>();
+  const params = useLocalSearchParams<{ imageUri?: string; cartImages?: string; barcode?: string }>();
   const incrementScanCount = useAppStore((state) => state.incrementScanCount);
   const collection = useAppStore((state) => state.collection);
   const { resetCart } = useScanCart();
@@ -178,21 +180,33 @@ export default function LoadingScreen() {
       try {
         let result: AnalysisResult;
 
+        // If barcode was scanned, look up Discogs metadata first
+        let discogsData: DiscogsResult | null = null;
+        if (params.barcode) {
+          try {
+            discogsData = await searchByBarcode(params.barcode);
+          } catch (discogsErr) {
+            console.warn('[Loading] Discogs lookup failed, continuing with visual-only:', discogsErr);
+          }
+        }
+
         if (parsedCart.length > 0) {
           try {
-            result = await analyzeImages(parsedCart);
+            result = await analyzeImages(parsedCart, discogsData, params.barcode);
           } catch (apiError) {
             const message = apiError instanceof Error ? apiError.message : '';
             if (message.includes('API key not configured')) {
               result = getRandomMockResult();
               result.imageUri = imageUri;
               result.images = parsedCart.map((img) => img.uri);
+              if (params.barcode) result.barcode = params.barcode;
             } else {
               throw apiError;
             }
           }
         } else {
           result = getRandomMockResult();
+          if (params.barcode) result.barcode = params.barcode;
         }
 
         apiResultRef.current = result;
@@ -246,6 +260,7 @@ export default function LoadingScreen() {
       imageUri: primaryImage?.uri,
       images: parsedCart.map((img) => img.uri),
       createdAt: Date.now(),
+      ...(params.barcode ? { barcode: params.barcode } : {}),
     };
 
     resetCart();

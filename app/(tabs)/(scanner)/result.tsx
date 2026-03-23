@@ -557,6 +557,12 @@ export default function ResultScreen() {
               <Ionicons name="calendar" size={12} color={colors.iconMuted} />
               <Text style={styles.chipText}>{item.year}</Text>
             </View>
+            {item.barcode && (
+              <View style={styles.chip}>
+                <Ionicons name="barcode" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{item.barcode}</Text>
+              </View>
+            )}
           </View>
 
           {/* Key-value rows: Grade, Date */}
@@ -604,6 +610,16 @@ export default function ResultScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.iconSubtle} />
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Vibe Pairing ── */}
+        {item.vibePairing && (
+          <View style={styles.vibePairingSection}>
+            <View style={styles.vibePairingCard}>
+              <Ionicons name="headset" size={18} color={colors.accentPrimary} />
+              <Text style={styles.vibePairingText}>{item.vibePairing}</Text>
+            </View>
           </View>
         )}
 
@@ -858,6 +874,31 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textMuted,
     marginTop: 2,
+  },
+
+  // ── Vibe Pairing ──
+  vibePairingSection: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+  },
+  vibePairingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accentSurface,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  vibePairingText: {
+    flex: 1,
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontWeight: '500',
+    color: colors.accentPrimary,
+    lineHeight: 20,
   },
 
   // ── Description ──

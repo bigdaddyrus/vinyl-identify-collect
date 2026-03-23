@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,12 +31,14 @@ const ZOOM_STEPS = [0, 0.125, 0.25, 0.375, 0.5];
 const ZOOM_LABELS = ['1x', '1.5x', '2x', '2.5x', '3x'];
 
 const STEP_LABELS: Record<string, string> = {
+  barcode: 'Scan Barcode',
   front: appConfig.scanner.frontCoverButtonText ?? 'Scan Front Cover',
   back: appConfig.scanner.backCoverButtonText ?? 'Scan Back Cover',
   label: appConfig.scanner.labelButtonText ?? 'Scan Center Label (Optional)',
 };
 
 const STEP_INSTRUCTIONS: Record<string, string> = {
+  barcode: 'Point camera at the barcode on the record sleeve',
   front: 'Position the front cover within the frame',
   back: 'Position the back cover within the frame',
   label: 'Position the center label within the frame',
@@ -52,7 +54,8 @@ export default function ScannerHomeScreen() {
   const [hasShownTips, setHasShownTips] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [zoom, setZoom] = useState(0); // 0 = 1x, normalized 0-1
-  const { cart, removeImage, resetCart } = useScanCart();
+  const { cart, removeImage, setBarcode, skipBarcode, resetCart } = useScanCart();
+  const [barcodeScanned, setBarcodeScanned] = useState(false);
 
   // Show snap tips on first visit
   useEffect(() => {
@@ -63,6 +66,13 @@ export default function ScannerHomeScreen() {
   }, [hasSeenSnapTips, hasShownTips]);
 
   const snapsRemaining = isPremium ? null : Math.max(0, DAILY_SNAP_LIMIT - scanCount);
+
+  const handleBarcodeScanned = useCallback((result: BarcodeScanningResult) => {
+    if (barcodeScanned || cart.currentStep !== 'barcode') return;
+    setBarcodeScanned(true);
+    triggerButtonPress();
+    setBarcode(result.data);
+  }, [barcodeScanned, cart.currentStep, setBarcode]);
 
   const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
     router.push({
@@ -91,7 +101,9 @@ export default function ScannerHomeScreen() {
     });
 
     if (!result.canceled) {
-      const imageType = cart.currentStep === 'ready' ? 'label' : cart.currentStep;
+      const step = cart.currentStep;
+      const imageType = step === 'ready' || step === 'barcode' ? 'front' : step;
+      if (step === 'barcode') skipBarcode();
       goToCrop(result.assets[0].uri, imageType);
     }
   };
@@ -104,7 +116,8 @@ export default function ScannerHomeScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
       if (photo) {
-        const imageType = cart.currentStep === 'ready' ? 'label' : cart.currentStep;
+        const step = cart.currentStep;
+        const imageType = step === 'ready' || step === 'barcode' ? 'front' : step;
         goToCrop(photo.uri, imageType);
       }
     } catch {
@@ -116,7 +129,10 @@ export default function ScannerHomeScreen() {
     triggerButtonPress();
     router.replace({
       pathname: '/(tabs)/(scanner)/loading',
-      params: { cartImages: JSON.stringify(cart.images) },
+      params: {
+        cartImages: JSON.stringify(cart.images),
+        ...(cart.barcode ? { barcode: cart.barcode } : {}),
+      },
     });
   };
 
@@ -182,6 +198,7 @@ export default function ScannerHomeScreen() {
 
   const handleResetCart = () => {
     triggerButtonPress();
+    setBarcodeScanned(false);
     resetCart();
   };
 
@@ -227,6 +244,7 @@ export default function ScannerHomeScreen() {
     );
   }
 
+  const isBarcode = cart.currentStep === 'barcode';
   const isReady = cart.currentStep === 'ready';
   const hasLabel = cart.images.some((img) => img.type === 'label');
 
@@ -239,6 +257,10 @@ export default function ScannerHomeScreen() {
         facing="back"
         enableTorch={flashEnabled}
         zoom={zoom}
+        {...(isBarcode ? {
+          barcodeScannerSettings: { barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] },
+          onBarcodeScanned: handleBarcodeScanned,
+        } : {})}
       />
 
       {/* Top Bar */}
@@ -329,7 +351,31 @@ export default function ScannerHomeScreen() {
           </View>
         )}
 
-        {isReady ? (
+        {/* Barcode detected indicator */}
+        {cart.barcode && (
+          <View style={styles.barcodeDetected}>
+            <Ionicons name="barcode" size={14} color={colors.success} />
+            <Text style={styles.barcodeDetectedText}>Barcode: {cart.barcode}</Text>
+          </View>
+        )}
+
+        {isBarcode ? (
+          /* Barcode step: scanning overlay + skip button */
+          <View style={styles.readyControls}>
+            <View style={styles.barcodeScanningIndicator}>
+              <Ionicons name="barcode-outline" size={24} color={colors.accentPrimary} />
+              <Text style={styles.barcodeScanningText}>Scanning for barcode...</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => { triggerButtonPress(); skipBarcode(); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
+              <Text style={styles.secondaryButtonText}>Skip Barcode (Vintage Record)</Text>
+            </TouchableOpacity>
+          </View>
+        ) : isReady ? (
           /* Ready state: optional label scan + Run Analysis */
           <View style={styles.readyControls}>
             {!hasLabel && (
@@ -665,6 +711,32 @@ const styles = StyleSheet.create({
   },
   galleryFallbackText: {
     ...typography.body,
+    color: colors.accentPrimary,
+  },
+
+  // ── Barcode Step ──
+  barcodeDetected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.xs,
+  },
+  barcodeDetectedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  barcodeScanningIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  barcodeScanningText: {
+    fontSize: 15,
+    fontWeight: '500',
     color: colors.accentPrimary,
   },
 });

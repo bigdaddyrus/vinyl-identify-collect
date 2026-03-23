@@ -80,7 +80,8 @@ export interface CapturedImage {
 
 export interface ScanCart {
   images: CapturedImage[];
-  currentStep: 'front' | 'back' | 'label' | 'ready';
+  currentStep: 'barcode' | 'front' | 'back' | 'label' | 'ready';
+  barcode?: string;
 }
 
 export interface ResultLabels {
@@ -332,6 +333,8 @@ export interface AnalysisResult {
   genre?: string; // Music genre (e.g. "Rock", "Jazz", "Electronic")
   rarity?: string; // e.g. 'Very Common', 'Common', 'Uncommon', 'Rare', 'Very Rare', 'Extremely Rare'
   condition?: string; // e.g. 'Mint', 'AU', 'VF', 'F', 'VG', 'G', 'Fair', 'Poor', 'Uncertain'
+  barcode?: string; // EAN/UPC barcode from physical record sleeve
+  vibePairing?: string; // Evocative listening recommendation (e.g. "Late-night drive with the windows down")
   albumArtQuery?: string; // Search query for scraping official album art (e.g. "Artist - Album - Year")
   collectionDate?: number; // Editable collection date (defaults to createdAt)
   notes?: string; // User-editable notes

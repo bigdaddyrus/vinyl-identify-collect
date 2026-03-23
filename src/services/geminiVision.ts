@@ -4,6 +4,7 @@ import { AnalysisResult, CapturedImage, ExtendedDetailSection } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { normalizeOrigin } from '@/data/countryCoordinates';
 import { analysisResponseSchema } from './analysisSchema';
+import type { DiscogsResult } from './discogs';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -87,12 +88,51 @@ function stripMarkdownFences(text: string): string {
   return cleaned.trim();
 }
 
+const VIBE_PAIRING_INSTRUCTION = `
+"vibePairing": "A short, evocative recommendation of when/where/how to listen to this record (e.g. 'Late-night drive with the windows down', 'Sunday morning coffee on the porch'). Max 100 characters."`;
+
+function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string): string {
+  const tracklistStr = discogsData.tracklist.length > 0
+    ? discogsData.tracklist.slice(0, 10).join(', ')
+    : 'N/A';
+
+  return `The following record has been identified via barcode lookup:
+Artist: ${discogsData.artist}
+Title: ${discogsData.title}
+Year: ${discogsData.year}
+Label: ${discogsData.label}
+Genre: ${discogsData.genre}
+Cat#: ${discogsData.catNo}
+Country: ${discogsData.country}
+Formats: ${discogsData.formats.join(', ')}
+Tracklist: ${tracklistStr}
+
+Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write a vibePairing.
+
+${basePrompt}
+
+IMPORTANT: Also include this field in your JSON response:
+${VIBE_PAIRING_INSTRUCTION}`;
+}
+
+function addVibePairingToPrompt(basePrompt: string): string {
+  return `${basePrompt}
+
+IMPORTANT: Also include this field in your JSON response:
+${VIBE_PAIRING_INSTRUCTION}`;
+}
+
 /**
  * Analyzes multiple images using Google Gemini Vision API.
  * Accepts a cart of captured images (front, back, label).
+ * Optionally accepts Discogs metadata for barcode-enriched analysis.
  * Returns an AnalysisResult with generated ID and timestamp.
  */
-export async function analyzeImages(capturedImages: CapturedImage[]): Promise<AnalysisResult> {
+export async function analyzeImages(
+  capturedImages: CapturedImage[],
+  discogsData?: DiscogsResult | null,
+  barcode?: string,
+): Promise<AnalysisResult> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
@@ -134,10 +174,17 @@ export async function analyzeImages(capturedImages: CapturedImage[]): Promise<An
     },
   });
 
+  // Build the prompt: enrich with Discogs data (Scenario A) or add vibe pairing only (Scenario B)
+  const prompt = discogsData
+    ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt)
+    : addVibePairingToPrompt(systemPrompt);
+
+  console.log('[Gemini] Prompt scenario:', discogsData ? 'A (Discogs-enriched)' : 'B (visual-only)');
+
   // Build content: text prompt + all image parts
   console.log('[Gemini] Sending request to API with', imageParts.length, 'images...');
   const apiCall = genModel.generateContent([
-    { text: systemPrompt },
+    { text: prompt },
     ...imageParts,
   ]);
 
@@ -231,6 +278,8 @@ export async function analyzeImages(capturedImages: CapturedImage[]): Promise<An
     ...(validated.label && { label: validated.label }),
     ...(validated.genre && { genre: validated.genre }),
     ...(validated.condition && { condition: validated.condition }),
+    ...(validated.vibePairing && { vibePairing: validated.vibePairing }),
+    ...(barcode && { barcode }),
     ...(validated.albumArtQuery && { albumArtQuery: validated.albumArtQuery }),
     ...(extendedDetails && { extendedDetails }),
     imageUri: (capturedImages.find((img) => img.type === 'front') ?? capturedImages[0])?.uri,
@@ -251,5 +300,5 @@ export async function analyzeImages(capturedImages: CapturedImage[]): Promise<An
  * Backward-compatible single-image analysis wrapper.
  */
 export async function analyzeImage(imageUri: string): Promise<AnalysisResult> {
-  return analyzeImages([{ type: 'front', uri: imageUri }]);
+  return analyzeImages([{ type: 'front', uri: imageUri }], null);
 }
