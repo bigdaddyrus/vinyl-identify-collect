@@ -7,11 +7,19 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  Modal,
+  StatusBar,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
@@ -281,6 +289,145 @@ const feedbackStyles = StyleSheet.create({
   },
 });
 
+// ── Fullscreen Image Viewer ──────────────────────────────────
+const AnimatedImage = Animated.createAnimatedComponent(Image);
+
+function FullscreenViewer({
+  visible,
+  uri,
+  onClose,
+}: {
+  visible: boolean;
+  uri: string;
+  onClose: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const resetTransform = () => {
+    scale.value = withTiming(1);
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedScale.value = 1;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+  };
+
+  const pinch = Gesture.Pinch()
+    .onStart(() => {
+      savedScale.value = scale.value;
+    })
+    .onUpdate((e) => {
+      scale.value = Math.max(1, Math.min(5, savedScale.value * e.scale));
+    })
+    .onEnd(() => {
+      if (scale.value < 1.1) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        savedScale.value = scale.value;
+      }
+    });
+
+  const pan = Gesture.Pan()
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
+    .onUpdate((e) => {
+      if (scale.value > 1) {
+        translateX.value = savedTranslateX.value + e.translationX;
+        translateY.value = savedTranslateY.value + e.translationY;
+      }
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1.5) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        scale.value = withTiming(3);
+        savedScale.value = 3;
+      }
+    });
+
+  const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const handleClose = () => {
+    resetTransform();
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <StatusBar barStyle="light-content" />
+      <GestureHandlerRootView style={fullscreenStyles.container}>
+        <TouchableOpacity
+          style={fullscreenStyles.closeButton}
+          onPress={handleClose}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={28} color={colors.white} />
+        </TouchableOpacity>
+        <GestureDetector gesture={composed}>
+          <AnimatedImage
+            source={{ uri }}
+            style={[fullscreenStyles.image, animatedStyle]}
+            contentFit="contain"
+          />
+        </GestureDetector>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+const fullscreenStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  image: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.8,
+  },
+});
+
 // ── Main Result Screen ──────────────────────────────────────
 export default function ResultScreen() {
   const params = useLocalSearchParams();
@@ -290,6 +437,7 @@ export default function ResultScreen() {
   const collection = useAppStore((state) => state.collection);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
 
   const onImageScroll = useCallback(
@@ -507,9 +655,14 @@ export default function ResultScreen() {
               style={styles.carousel}
             >
               {imageList.map((uri, i) => (
-                <View key={`img-${i}`} style={styles.carouselItem}>
+                <TouchableOpacity
+                  key={`img-${i}`}
+                  style={styles.carouselItem}
+                  onPress={() => setFullscreenUri(uri)}
+                  activeOpacity={0.9}
+                >
                   <Image source={{ uri }} style={styles.carouselImage} contentFit="contain" />
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           ) : (
@@ -707,6 +860,13 @@ export default function ResultScreen() {
           </SafeAreaView>
         </View>
       </View>
+
+      {/* ── Fullscreen Image Viewer ── */}
+      <FullscreenViewer
+        visible={!!fullscreenUri}
+        uri={fullscreenUri ?? ''}
+        onClose={() => setFullscreenUri(null)}
+      />
     </View>
   );
 }

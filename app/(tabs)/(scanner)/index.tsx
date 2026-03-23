@@ -54,7 +54,7 @@ export default function ScannerHomeScreen() {
   const [hasShownTips, setHasShownTips] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [zoom, setZoom] = useState(0); // 0 = 1x, normalized 0-1
-  const { cart, removeImage, setBarcode, skipBarcode, resetCart } = useScanCart();
+  const { cart, removeImage, setBarcode, skipBarcode, rescanBarcode, resetCart } = useScanCart();
   const [barcodeScanned, setBarcodeScanned] = useState(false);
 
   // Show snap tips on first visit
@@ -281,6 +281,13 @@ export default function ScannerHomeScreen() {
 
           {/* Right actions */}
           <View style={styles.topBarRight}>
+            {/* Rescan barcode (when past barcode step) */}
+            {!isBarcode && (
+              <TouchableOpacity style={styles.topBarIcon} onPress={() => { triggerButtonPress(); setBarcodeScanned(false); rescanBarcode(); }} activeOpacity={0.7}>
+                <Ionicons name="barcode-outline" size={20} color={colors.white} />
+              </TouchableOpacity>
+            )}
+
             {/* Reset cart (if images captured) */}
             {cart.images.length > 0 && (
               <TouchableOpacity style={styles.topBarIcon} onPress={handleResetCart} activeOpacity={0.7}>

@@ -12,6 +12,7 @@ interface ScanCartContextValue {
   removeImage: (type: CapturedImage['type']) => void;
   setBarcode: (code: string) => void;
   skipBarcode: () => void;
+  rescanBarcode: () => void;
   resetCart: () => void;
 }
 
@@ -59,12 +60,16 @@ export function ScanCartProvider({ children }: { children: ReactNode }) {
     setCart((prev) => ({ ...prev, currentStep: 'front' }));
   }, []);
 
+  const rescanBarcode = useCallback(() => {
+    setCart((prev) => ({ ...prev, barcode: undefined, currentStep: 'barcode' }));
+  }, []);
+
   const resetCart = useCallback(() => {
     setCart(INITIAL_CART);
   }, []);
 
   return (
-    <ScanCartContext.Provider value={{ cart, addImage, removeImage, setBarcode, skipBarcode, resetCart }}>
+    <ScanCartContext.Provider value={{ cart, addImage, removeImage, setBarcode, skipBarcode, rescanBarcode, resetCart }}>
       {children}
     </ScanCartContext.Provider>
   );
