@@ -145,6 +145,7 @@ export async function analyzeImages(
 
   const { model, systemPrompt, maxTokens, temperature } = appConfig.ai;
 
+  console.log('[Discogs] Received discogsData for analysis:', discogsData);
   console.log('[Gemini] Starting multi-image analysis...');
   console.log('[Gemini] Model:', model);
   console.log('[Gemini] Images:', capturedImages.map((img) => `${img.type}: ${img.uri}`));

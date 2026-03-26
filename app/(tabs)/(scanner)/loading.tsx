@@ -182,11 +182,17 @@ export default function LoadingScreen() {
 
         // If barcode was scanned, look up Discogs metadata first
         let discogsData: DiscogsResult | null = null;
+        console.log('[Loading] barcode param:', params.barcode ?? '(none)');
+        console.log('[Loading] DISCOGS_KEY:', process.env.EXPO_PUBLIC_DISCOGS_KEY ?? '(not set)');
+        console.log('[Loading] DISCOGS_SECRET:', process.env.EXPO_PUBLIC_DISCOGS_SECRET ? 'set' : '(not set)');
+
         if (params.barcode) {
+          console.log('[Loading] Calling searchByBarcode...');
           try {
             discogsData = await searchByBarcode(params.barcode);
+            console.log('[Loading] Discogs result:', discogsData ? JSON.stringify(discogsData).substring(0, 200) : 'null');
           } catch (discogsErr) {
-            console.warn('[Loading] Discogs lookup failed, continuing with visual-only:', discogsErr);
+            console.log('[Loading] Discogs lookup THREW:', discogsErr);
           }
         }
 

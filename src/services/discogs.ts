@@ -13,6 +13,38 @@ export interface DiscogsResult {
   formats: string[];
 }
 
+function getAuthParams(): string | null {
+  const key = process.env.EXPO_PUBLIC_DISCOGS_KEY;
+  const secret = process.env.EXPO_PUBLIC_DISCOGS_SECRET;
+  if (key && secret) return `key=${key}&secret=${secret}`;
+
+  const token = process.env.EXPO_PUBLIC_DISCOGS_TOKEN;
+  if (token) return `token=${token}`;
+
+  return null;
+}
+
+function getAuthHeader(): Record<string, string> {
+  const key = process.env.EXPO_PUBLIC_DISCOGS_KEY;
+  const secret = process.env.EXPO_PUBLIC_DISCOGS_SECRET;
+  if (key && secret) {
+    return {
+      'Authorization': `Discogs key=${key}, secret=${secret}`,
+      'User-Agent': 'VinylCollect/1.0',
+    };
+  }
+
+  const token = process.env.EXPO_PUBLIC_DISCOGS_TOKEN;
+  if (token) {
+    return {
+      'Authorization': `Discogs token=${token}`,
+      'User-Agent': 'VinylCollect/1.0',
+    };
+  }
+
+  return { 'User-Agent': 'VinylCollect/1.0' };
+}
+
 async function fetchWithTimeout(url: string, headers: Record<string, string>): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -25,46 +57,65 @@ async function fetchWithTimeout(url: string, headers: Record<string, string>): P
 
 /**
  * Search Discogs by barcode (EAN/UPC) and return structured metadata.
- * Returns null if no match found or if the token is not configured.
+ * Returns null if no match found or if credentials are not configured.
  */
 export async function searchByBarcode(barcode: string): Promise<DiscogsResult | null> {
+  console.log('[Discogs] searchByBarcode called with:', barcode);
+
+  const key = process.env.EXPO_PUBLIC_DISCOGS_KEY;
+  const secret = process.env.EXPO_PUBLIC_DISCOGS_SECRET;
   const token = process.env.EXPO_PUBLIC_DISCOGS_TOKEN;
-  if (!token) {
-    console.warn('[Discogs] EXPO_PUBLIC_DISCOGS_TOKEN not configured, skipping lookup');
+
+  console.log('[Discogs] Env vars:', {
+    EXPO_PUBLIC_DISCOGS_KEY: key ? `${key.substring(0, 6)}...` : '(not set)',
+    EXPO_PUBLIC_DISCOGS_SECRET: secret ? `${secret.substring(0, 6)}...` : '(not set)',
+    EXPO_PUBLIC_DISCOGS_TOKEN: token ? `${token.substring(0, 6)}...` : '(not set)',
+  });
+
+  const authParams = getAuthParams();
+  if (!authParams) {
+    console.log('[Discogs] ❌ No API credentials found — did you restart Metro with --clear after adding .env.local?');
     return null;
   }
 
-  const headers = {
-    'Authorization': `Discogs token=${token}`,
-    'User-Agent': 'VinylCollect/1.0',
-  };
+  const headers = getAuthHeader();
 
   try {
-    console.log(`[Discogs] Searching barcode: ${barcode}`);
+    console.log(`[Discogs] 🔍 Searching barcode: ${barcode}`);
 
-    const searchUrl = `${API_BASE}/database/search?barcode=${encodeURIComponent(barcode)}&type=release&token=${token}`;
+    const searchUrl = `${API_BASE}/database/search?barcode=${encodeURIComponent(barcode)}&type=release`;
+    console.log('[Discogs] Search URL:', searchUrl);
+
     const searchRes = await fetchWithTimeout(searchUrl, headers);
+    console.log(`[Discogs] Search response: ${searchRes.status} ${searchRes.statusText}`);
 
     if (!searchRes.ok) {
-      console.warn(`[Discogs] Search failed: ${searchRes.status}`);
+      const errorBody = await searchRes.text().catch(() => '(could not read body)');
+      console.log(`[Discogs] ❌ Search failed: ${searchRes.status} — ${errorBody}`);
       return null;
     }
 
     const searchData = await searchRes.json();
+    console.log(`[Discogs] Search results count: ${searchData.results?.length ?? 0}`);
+
     const firstResult = searchData.results?.[0];
     if (!firstResult) {
-      console.log('[Discogs] No results found for barcode');
+      console.log('[Discogs] ❌ No results found for barcode');
       return null;
     }
 
-    console.log(`[Discogs] Found: ${firstResult.title} (ID: ${firstResult.id})`);
+    console.log(`[Discogs] ✅ Found: ${firstResult.title} (ID: ${firstResult.id})`);
 
     // Fetch full release details
     const releaseUrl = `${API_BASE}/releases/${firstResult.id}`;
+    console.log('[Discogs] Fetching release:', releaseUrl);
+
     const releaseRes = await fetchWithTimeout(releaseUrl, headers);
+    console.log(`[Discogs] Release response: ${releaseRes.status} ${releaseRes.statusText}`);
 
     if (!releaseRes.ok) {
-      console.warn(`[Discogs] Release fetch failed: ${releaseRes.status}`);
+      const errorBody = await releaseRes.text().catch(() => '(could not read body)');
+      console.log(`[Discogs] ❌ Release fetch failed: ${releaseRes.status} — ${errorBody}`);
       return null;
     }
 
@@ -82,19 +133,14 @@ export async function searchByBarcode(barcode: string): Promise<DiscogsResult | 
       formats: release.formats?.map((f: { name: string }) => f.name) ?? [],
     };
 
-    console.log('[Discogs] Release data:', {
-      artist: result.artist,
-      title: result.title,
-      year: result.year,
-      label: result.label,
-    });
+    console.log('[Discogs] ✅ Release data:', JSON.stringify(result, null, 2));
 
     return result;
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      console.warn('[Discogs] Request timed out');
+      console.log('[Discogs] ❌ Request timed out after', TIMEOUT_MS, 'ms');
     } else {
-      console.warn('[Discogs] Error:', err);
+      console.log('[Discogs] ❌ Error:', err);
     }
     return null;
   }
