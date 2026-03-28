@@ -540,7 +540,7 @@ export default function ResultScreen() {
           style: 'destructive',
           onPress: () => {
             removeFromCollection(item.id);
-            router.back();
+            navigateBack();
           },
         },
       ]
@@ -560,13 +560,25 @@ export default function ResultScreen() {
     });
   };
 
+  const navigateBack = useCallback(() => {
+    const source = params.source as string | undefined;
+    if (source?.startsWith('portfolio-')) {
+      const tab = source.replace('portfolio-', '');
+      router.navigate({ pathname: '/(tabs)/portfolio', params: { tab } });
+    } else if (source?.startsWith('setdetail:')) {
+      const sid = source.replace('setdetail:', '');
+      router.navigate({ pathname: '/(tabs)/(scanner)/setdetail', params: { setId: sid } });
+    } else {
+      router.back();
+    }
+  }, [params.source]);
+
   const handleBack = () => {
     triggerButtonPress();
     if (pendingSave) {
-      // Remove temporarily saved item if user backs out without saving
       removeFromCollection(item.id);
     }
-    router.back();
+    navigateBack();
   };
 
   const handleEdit = () => {
@@ -607,7 +619,7 @@ export default function ResultScreen() {
                 style: 'destructive',
                 onPress: () => {
                   removeFromCollection(item.id);
-                  router.back();
+                  navigateBack();
                 },
               },
             ]

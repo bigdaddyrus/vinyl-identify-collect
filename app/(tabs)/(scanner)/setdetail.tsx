@@ -44,7 +44,7 @@ export default function SetDetailScreen() {
   const handleItemPress = (item: AnalysisResult) => {
     router.push({
       pathname: '/(tabs)/(scanner)/result',
-      params: { resultData: JSON.stringify(item) },
+      params: { resultData: JSON.stringify(item), source: `setdetail:${setId}` },
     });
   };
 

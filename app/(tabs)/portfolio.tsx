@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -37,6 +37,11 @@ export default function PortfolioScreen() {
   const getSetValue = useAppStore((state) => state.getSetValue);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState(tab ?? appConfig.collection.tabs[0].key);
+
+  useEffect(() => {
+    if (tab) setActiveTab(tab);
+  }, [tab]);
+
   const [sortBy, setSortBy] = useState('Highest Value');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showPageMenu, setShowPageMenu] = useState(false);
@@ -150,7 +155,7 @@ export default function PortfolioScreen() {
   const handleItemPress = (item: AnalysisResult) => {
     router.push({
       pathname: '/(tabs)/(scanner)/result',
-      params: { resultData: JSON.stringify(item) },
+      params: { resultData: JSON.stringify(item), source: `portfolio-${activeTab}` },
     });
   };
 
