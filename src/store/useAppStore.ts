@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File } from 'expo-file-system';
-import { AppStore, AnalysisResult, OriginDistribution } from '@/types';
+import { AppStore, AnalysisResult, CollectionSet, OriginDistribution } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { useState, useEffect } from 'react';
 import { getRarityScore } from '@/utils/rarity';
@@ -22,6 +22,7 @@ export const useAppStore = create<AppStore>()(
       isPremium: false,
       collection: [],
       scanCount: 0,
+      sets: [],
       hasTriggeredReview: false,
       hasSeenSnapTips: false,
 
@@ -139,6 +140,92 @@ export const useAppStore = create<AppStore>()(
       setSyncing: (isSyncing: boolean) => set({ isSyncing }),
       setLastSyncedAt: (timestamp: number) => set({ lastSyncedAt: timestamp }),
 
+      // ── Set CRUD ──
+      createSet: (name: string): CollectionSet => {
+        const now = Date.now();
+        const newSet: CollectionSet = {
+          id: `set_${now}_${Math.random().toString(36).slice(2, 8)}`,
+          name,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const { sets } = get();
+        set({ sets: [...sets, newSet] });
+        return newSet;
+      },
+
+      renameSet: (id: string, name: string) => {
+        const { sets } = get();
+        set({
+          sets: sets.map((s) =>
+            s.id === id ? { ...s, name, updatedAt: Date.now() } : s
+          ),
+        });
+      },
+
+      deleteSet: (id: string) => {
+        const { sets, collection } = get();
+        set({
+          sets: sets.filter((s) => s.id !== id),
+          collection: collection.map((item) =>
+            item.setIds?.includes(id)
+              ? { ...item, setIds: item.setIds.filter((sid) => sid !== id) }
+              : item
+          ),
+        });
+      },
+
+      addItemToSet: (itemId: string, setId: string) => {
+        const { collection, sets } = get();
+        set({
+          collection: collection.map((item) => {
+            if (item.id !== itemId) return item;
+            const current = item.setIds ?? [];
+            if (current.includes(setId)) return item;
+            return { ...item, setIds: [...current, setId] };
+          }),
+          sets: sets.map((s) =>
+            s.id === setId ? { ...s, updatedAt: Date.now() } : s
+          ),
+        });
+      },
+
+      removeItemFromSet: (itemId: string, setId: string) => {
+        const { collection } = get();
+        set({
+          collection: collection.map((item) =>
+            item.id === itemId
+              ? { ...item, setIds: (item.setIds ?? []).filter((sid) => sid !== setId) }
+              : item
+          ),
+        });
+      },
+
+      addItemsToSet: (itemId: string, setIds: string[]) => {
+        const { collection, sets } = get();
+        const now = Date.now();
+        set({
+          collection: collection.map((item) =>
+            item.id === itemId ? { ...item, setIds } : item
+          ),
+          sets: sets.map((s) =>
+            setIds.includes(s.id) ? { ...s, updatedAt: now } : s
+          ),
+        });
+      },
+
+      getItemsInSet: (setId: string): AnalysisResult[] => {
+        const { collection } = get();
+        return collection.filter((item) => item.setIds?.includes(setId));
+      },
+
+      getSetValue: (setId: string): number => {
+        const { collection } = get();
+        return collection
+          .filter((item) => item.setIds?.includes(setId))
+          .reduce((sum, item) => sum + item.estimatedValue, 0);
+      },
+
       clearAllData: async () => {
         const { collection } = get();
         // Delete all stored image files
@@ -165,6 +252,7 @@ export const useAppStore = create<AppStore>()(
           isPremium: false,
           collection: [],
           scanCount: 0,
+          sets: [],
           hasTriggeredReview: false,
           hasSeenSnapTips: false,
           profileId: null,

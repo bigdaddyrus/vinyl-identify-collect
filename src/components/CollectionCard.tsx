@@ -15,13 +15,15 @@ interface Props {
   item: AnalysisResult;
   onPress?: () => void;
   onKebabPress?: () => void;
+  onLongPress?: () => void;
 }
 
-export function CollectionCard({ item, onPress, onKebabPress }: Props) {
+export function CollectionCard({ item, onPress, onKebabPress, onLongPress }: Props) {
   return (
     <TouchableOpacity
       style={styles.container}
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={0.7}
     >
       {/* Item Image or Placeholder */}

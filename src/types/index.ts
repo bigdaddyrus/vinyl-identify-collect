@@ -314,6 +314,14 @@ export interface ExtendedDetailSection {
   items: ExtendedDetailItem[];
 }
 
+// A named grouping of collection items (like a playlist)
+export interface CollectionSet {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Analysis result from AI (or mock)
 export interface AnalysisResult {
   id: string;
@@ -340,6 +348,7 @@ export interface AnalysisResult {
   albumArtQuery?: string; // Search query for scraping official album art (e.g. "Artist - Album - Year")
   collectionDate?: number; // Editable collection date (defaults to createdAt)
   notes?: string; // User-editable notes
+  setIds?: string[]; // IDs of sets this item belongs to
   extendedDetails?: ExtendedDetailSection[];
 }
 
@@ -361,6 +370,9 @@ export interface AppStore {
   // Collection state
   collection: AnalysisResult[];
   scanCount: number;
+
+  // Sets state
+  sets: CollectionSet[];
 
   // ASO state
   hasTriggeredReview: boolean;
@@ -393,5 +405,16 @@ export interface AppStore {
   setSyncing: (isSyncing: boolean) => void;
   setLastSyncedAt: (timestamp: number) => void;
   clearAllData: () => Promise<void>;
+
+  // Set actions
+  createSet: (name: string) => CollectionSet;
+  renameSet: (id: string, name: string) => void;
+  deleteSet: (id: string) => void;
+  addItemToSet: (itemId: string, setId: string) => void;
+  removeItemFromSet: (itemId: string, setId: string) => void;
+  addItemsToSet: (itemId: string, setIds: string[]) => void;
+  getItemsInSet: (setId: string) => AnalysisResult[];
+  getSetValue: (setId: string) => number;
+
   resetApp: () => void; // For testing
 }

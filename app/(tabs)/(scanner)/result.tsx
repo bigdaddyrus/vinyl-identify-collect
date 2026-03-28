@@ -25,6 +25,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientButton } from '@/components/GradientButton';
+import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { AnalysisResult, ExtendedDetailSection } from '@/types';
@@ -433,12 +434,14 @@ export default function ResultScreen() {
   const params = useLocalSearchParams();
   const addToCollection = useAppStore((state) => state.addToCollection);
   const removeFromCollection = useAppStore((state) => state.removeFromCollection);
+  const updateCollectionItem = useAppStore((state) => state.updateCollectionItem);
   const hasTriggeredReview = useAppStore((state) => state.hasTriggeredReview);
   const collection = useAppStore((state) => state.collection);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
+  const [showSetPicker, setShowSetPicker] = useState(false);
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -581,9 +584,13 @@ export default function ResultScreen() {
 
   const handleHeaderKebab = () => {
     triggerButtonPress();
-    const options: { text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }[] = [
-      { text: 'Edit', onPress: handleEdit },
-    ];
+    const options: { text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }[] = [];
+
+    if (isInCollection && !pendingSave) {
+      options.push({ text: 'Add to Set', onPress: () => setShowSetPicker(true) });
+    }
+
+    options.push({ text: 'Edit', onPress: handleEdit });
 
     if (isInCollection && !pendingSave) {
       options.push({
@@ -612,6 +619,8 @@ export default function ResultScreen() {
     options.push({ text: 'Cancel', style: 'cancel' });
     Alert.alert(item.name, undefined, options);
   };
+
+  const currentSetIds = storeItem?.setIds ?? paramResult.setIds ?? [];
 
   // Format collection date
   const collectionDateStr = item.collectionDate
@@ -866,6 +875,17 @@ export default function ResultScreen() {
         visible={!!fullscreenUri}
         uri={fullscreenUri ?? ''}
         onClose={() => setFullscreenUri(null)}
+      />
+
+      {/* Set Picker Modal */}
+      <SetPickerModal
+        visible={showSetPicker}
+        selectedSetIds={currentSetIds}
+        onDone={(ids) => {
+          updateCollectionItem(item.id, { setIds: ids });
+          setShowSetPicker(false);
+        }}
+        onClose={() => setShowSetPicker(false)}
       />
     </View>
   );
