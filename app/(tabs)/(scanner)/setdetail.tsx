@@ -15,14 +15,14 @@ import { normalizeOrigin } from '@/data/countryCoordinates';
 export default function SetDetailScreen() {
   const { setId } = useLocalSearchParams<{ setId: string }>();
   const sets = useAppStore((s) => s.sets);
-  const getItemsInSet = useAppStore((s) => s.getItemsInSet);
+  const collection = useAppStore((s) => s.collection);
   const removeItemFromSet = useAppStore((s) => s.removeItemFromSet);
   const removeFromCollection = useAppStore((s) => s.removeFromCollection);
 
   const [showAddModal, setShowAddModal] = useState(false);
 
   const set = sets.find((s) => s.id === setId);
-  const items = setId ? getItemsInSet(setId) : [];
+  const items = setId ? collection.filter((i) => i.setIds?.includes(setId)) : [];
   const originCount = new Set(items.map((item) => normalizeOrigin(item.origin))).size;
 
   if (!set) {
