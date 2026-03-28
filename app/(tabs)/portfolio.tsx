@@ -16,7 +16,8 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
-import { exportCollectionToPDF, exportCollectionToJSON, exportCollectionImages } from '@/utils/pdf';
+import { exportCollectionToPDF } from '@/utils/pdf';
+import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
 
 const DEFAULT_TAB_BAR_STYLE = {
   backgroundColor: '#0A0A0A',
@@ -155,7 +156,7 @@ export default function PortfolioScreen() {
     );
   };
 
-  const runBulkExport = async (exportFn: (items: AnalysisResult[]) => Promise<string>) => {
+  const runBulkExport = async (exportFn: (items: AnalysisResult[]) => Promise<void | string>) => {
     setIsExporting(true);
     try {
       const items = collection.filter((i) => selectedIds.has(i.id));
@@ -175,8 +176,8 @@ export default function PortfolioScreen() {
       `Export ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} as:`,
       [
         { text: 'PDF', onPress: () => runBulkExport(exportCollectionToPDF) },
-        { text: 'JSON', onPress: () => runBulkExport(exportCollectionToJSON) },
-        { text: 'Images (ZIP)', onPress: () => runBulkExport(exportCollectionImages) },
+        { text: 'JSON', onPress: () => runBulkExport(exportCollectionAsJSON) },
+        { text: 'Images (ZIP)', onPress: () => runBulkExport(exportImageAssetsZip) },
         { text: 'Cancel', style: 'cancel' },
       ]
     );

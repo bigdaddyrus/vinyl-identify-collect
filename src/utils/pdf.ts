@@ -1,7 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { readAsStringAsync, EncodingType, writeAsStringAsync, cacheDirectory } from 'expo-file-system/legacy';
-import JSZip from 'jszip';
+import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import { AnalysisResult } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { getDisplayName } from '@/data/countryCoordinates';
@@ -270,81 +269,6 @@ export async function exportCollectionToPDF(items: AnalysisResult[]): Promise<st
       mimeType: 'application/pdf',
       dialogTitle: `${appConfig.appName} - Collection Book`,
       UTI: 'com.adobe.pdf',
-    });
-  } else {
-    throw new Error('Sharing is not available on this device');
-  }
-
-  return uri;
-}
-
-/**
- * Exports collection items as a JSON file and shares it
- */
-export async function exportCollectionToJSON(items: AnalysisResult[]): Promise<string> {
-  const data = items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    origin: getDisplayName(item.origin),
-    year: item.year,
-    estimatedValue: item.estimatedValue,
-    confidence: item.confidence,
-    rarity: item.rarity,
-    condition: item.condition,
-    label: item.label,
-    genre: item.genre,
-    description: item.description,
-    createdAt: new Date(item.createdAt).toISOString(),
-  }));
-
-  const json = JSON.stringify(data, null, 2);
-  const uri = `${cacheDirectory}collection-export.json`;
-  await writeAsStringAsync(uri, json);
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (isAvailable) {
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/json',
-      dialogTitle: `${appConfig.appName} - Collection JSON`,
-    });
-  } else {
-    throw new Error('Sharing is not available on this device');
-  }
-
-  return uri;
-}
-
-/**
- * Exports collection item images as a ZIP file and shares it
- */
-export async function exportCollectionImages(items: AnalysisResult[]): Promise<string> {
-  const zip = new JSZip();
-
-  await Promise.all(
-    items.map(async (item, index) => {
-      if (!item.imageUri) return;
-      try {
-        const base64 = await readAsStringAsync(item.imageUri, {
-          encoding: EncodingType.Base64,
-        });
-        const ext = item.imageUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-        const safeName = item.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
-        zip.file(`${String(index + 1).padStart(2, '0')}_${safeName}.${ext}`, base64, { base64: true });
-      } catch {
-        // Skip items whose images can't be read
-      }
-    })
-  );
-
-  const content = await zip.generateAsync({ type: 'base64' });
-  const uri = `${cacheDirectory}collection-images.zip`;
-  await writeAsStringAsync(uri, content, { encoding: EncodingType.Base64 });
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (isAvailable) {
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/zip',
-      dialogTitle: `${appConfig.appName} - Collection Images`,
     });
   } else {
     throw new Error('Sharing is not available on this device');
