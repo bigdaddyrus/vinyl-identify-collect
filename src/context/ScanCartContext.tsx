@@ -41,14 +41,14 @@ export function ScanCartProvider({ children }: { children: ReactNode }) {
       // Replace if same type already exists, then normalize to deterministic order
       const filtered = prev.images.filter((existing) => existing.type !== img.type);
       const next = sortByType([...filtered, img]);
-      return { images: next, currentStep: getNextStep(next) };
+      return { ...prev, images: next, currentStep: getNextStep(next) };
     });
   }, []);
 
   const removeImage = useCallback((type: CapturedImage['type']) => {
     setCart((prev) => {
       const next = sortByType(prev.images.filter((img) => img.type !== type));
-      return { images: next, currentStep: getNextStep(next) };
+      return { ...prev, images: next, currentStep: getNextStep(next) };
     });
   }, []);
 
