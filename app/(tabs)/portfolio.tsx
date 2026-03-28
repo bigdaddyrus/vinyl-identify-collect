@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CollectionHeader } from '@/components/CollectionHeader';
 import { CollectionCard } from '@/components/CollectionCard';
@@ -16,10 +16,19 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
-import { exportCollectionToPDF } from '@/utils/pdf';
+import { exportCollectionToPDF, exportCollectionToJSON, exportCollectionImages } from '@/utils/pdf';
+
+const DEFAULT_TAB_BAR_STYLE = {
+  backgroundColor: '#0A0A0A',
+  borderTopWidth: 0,
+  paddingTop: 8,
+  paddingBottom: 8,
+  height: 70,
+} as const;
 
 export default function PortfolioScreen() {
   const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const navigation = useNavigation();
   const collection = useAppStore((state) => state.collection);
   const getTotalPortfolioValue = useAppStore((state) => state.getTotalPortfolioValue);
   const getUniqueOrigins = useAppStore((state) => state.getUniqueOrigins);
@@ -51,6 +60,14 @@ export default function PortfolioScreen() {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkMove, setShowBulkMove] = useState(false);
+
+  useLayoutEffect(() => {
+    navigation.getParent()?.setOptions({
+      tabBarStyle: isSelecting
+        ? { display: 'none' as const }
+        : DEFAULT_TAB_BAR_STYLE,
+    });
+  }, [isSelecting, navigation]);
 
   const totalValue = getTotalPortfolioValue();
   const originCount = getUniqueOrigins();
@@ -138,18 +155,31 @@ export default function PortfolioScreen() {
     );
   };
 
-  const handleBulkExport = async () => {
-    if (selectedIds.size === 0) return;
-    triggerButtonPress();
+  const runBulkExport = async (exportFn: (items: AnalysisResult[]) => Promise<string>) => {
     setIsExporting(true);
     try {
       const items = collection.filter((i) => selectedIds.has(i.id));
-      await exportCollectionToPDF(items);
+      await exportFn(items);
     } catch {
       Alert.alert('Export Failed', 'Unable to export. Please try again.', [{ text: 'OK' }]);
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleBulkExport = () => {
+    if (selectedIds.size === 0) return;
+    triggerButtonPress();
+    Alert.alert(
+      'Export Format',
+      `Export ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} as:`,
+      [
+        { text: 'PDF', onPress: () => runBulkExport(exportCollectionToPDF) },
+        { text: 'JSON', onPress: () => runBulkExport(exportCollectionToJSON) },
+        { text: 'Images (ZIP)', onPress: () => runBulkExport(exportCollectionImages) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const handleItemPress = (item: AnalysisResult) => {
