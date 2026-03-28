@@ -226,7 +226,7 @@ export default function LoadingScreen() {
     runAnalysis();
 
     return () => clearTimeout(stepTimer);
-  }, [error, imageUri, steps.length, progressWidth, parsedCart.length]);
+  }, [error, imageUri, steps.length, progressWidth, parsedCart, params.barcode]);
 
   // When API finishes and the step sequence has completed, navigate to the result
   useEffect(() => {
