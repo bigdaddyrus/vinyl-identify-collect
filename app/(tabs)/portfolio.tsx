@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CollectionHeader } from '@/components/CollectionHeader';
 import { CollectionCard } from '@/components/CollectionCard';
@@ -19,6 +19,7 @@ import { triggerButtonPress } from '@/utils/haptics';
 import { exportCollectionToPDF } from '@/utils/pdf';
 
 export default function PortfolioScreen() {
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const collection = useAppStore((state) => state.collection);
   const getTotalPortfolioValue = useAppStore((state) => state.getTotalPortfolioValue);
   const getUniqueOrigins = useAppStore((state) => state.getUniqueOrigins);
@@ -35,7 +36,7 @@ export default function PortfolioScreen() {
   const getItemsInSet = useAppStore((state) => state.getItemsInSet);
   const getSetValue = useAppStore((state) => state.getSetValue);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState(appConfig.collection.tabs[0].key);
+  const [activeTab, setActiveTab] = useState(tab ?? appConfig.collection.tabs[0].key);
   const [sortBy, setSortBy] = useState('Highest Value');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showPageMenu, setShowPageMenu] = useState(false);
@@ -280,9 +281,9 @@ export default function PortfolioScreen() {
               )}
             </View>
 
-            {/* Sort/Filter Row */}
-            {appConfig.collection.sortOptions && (
-              <View style={styles.sortRow}>
+            {/* Sort/Filter Row + Bulk Action */}
+            <View style={styles.sortRow}>
+              {appConfig.collection.sortOptions && (
                 <TouchableOpacity
                   style={styles.sortButton}
                   activeOpacity={0.7}
@@ -292,8 +293,19 @@ export default function PortfolioScreen() {
                   <Text style={styles.sortText}>{sortBy}</Text>
                   <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
                 </TouchableOpacity>
-              </View>
-            )}
+              )}
+              <TouchableOpacity
+                style={styles.bulkSelectButton}
+                activeOpacity={0.7}
+                onPress={() => {
+                  triggerButtonPress();
+                  setIsSelecting(true);
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.textSecondary} />
+                <Text style={styles.sortText}>Select</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </View>
@@ -739,10 +751,20 @@ const styles = StyleSheet.create({
   },
   sortRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.sm,
   },
   sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.round,
+  },
+  bulkSelectButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,

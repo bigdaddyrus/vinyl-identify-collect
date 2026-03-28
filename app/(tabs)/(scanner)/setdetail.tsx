@@ -35,7 +35,10 @@ export default function SetDetailScreen() {
 
   const handleBack = () => {
     triggerButtonPress();
-    router.back();
+    router.navigate({
+      pathname: '/(tabs)/portfolio',
+      params: { tab: 'sets' },
+    });
   };
 
   const handleItemPress = (item: AnalysisResult) => {
