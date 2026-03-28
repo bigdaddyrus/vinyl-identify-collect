@@ -26,10 +26,10 @@ export function CollectionCard({ item, onPress, onKebabPress, onLongPress }: Pro
       onLongPress={onLongPress}
       activeOpacity={0.7}
     >
-      {/* Item Image or Placeholder */}
-      {item.imageUri ? (
+      {/* Item Image or Placeholder — prefer Discogs thumbnail for crisp list images */}
+      {(item.discogsThumbnail || item.imageUri) ? (
         <Image
-          source={{ uri: item.imageUri }}
+          source={{ uri: item.discogsThumbnail || item.imageUri }}
           style={styles.itemImage}
           contentFit="cover"
         />

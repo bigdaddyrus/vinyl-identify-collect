@@ -95,7 +95,11 @@ const PAIRING_INSTRUCTIONS = `
 
 function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string): string {
   const tracklistStr = discogsData.tracklist.length > 0
-    ? discogsData.tracklist.slice(0, 10).join(', ')
+    ? discogsData.tracklist.slice(0, 10).map((t) => `${t.position} ${t.title}`.trim()).join(', ')
+    : 'N/A';
+
+  const stylesStr = discogsData.styles.length > 0
+    ? discogsData.styles.join(', ')
     : 'N/A';
 
   return `The following record has been identified via barcode lookup:
@@ -104,6 +108,7 @@ Title: ${discogsData.title}
 Year: ${discogsData.year}
 Label: ${discogsData.label}
 Genre: ${discogsData.genre}
+Styles: ${stylesStr}
 Cat#: ${discogsData.catNo}
 Country: ${discogsData.country}
 Formats: ${discogsData.formats.join(', ')}
@@ -290,6 +295,24 @@ export async function analyzeImages(
     imageUri: (capturedImages.find((img) => img.type === 'front') ?? capturedImages[0])?.uri,
     images: capturedImages.map((img) => img.uri),
     createdAt: Date.now(),
+    // Merge Discogs enrichment data when available
+    ...(discogsData && {
+      ...(discogsData.thumbnail && { discogsThumbnail: discogsData.thumbnail }),
+      ...(discogsData.primaryImage && { discogsImage: discogsData.primaryImage }),
+      ...(discogsData.discogsImages.length > 0 && { discogsImages: discogsData.discogsImages }),
+      ...(discogsData.styles.length > 0 && { styles: discogsData.styles }),
+      ...(discogsData.weight && { weight: discogsData.weight }),
+      ...(discogsData.tracklist.length > 0 && { discogsTracklist: discogsData.tracklist }),
+      ...(discogsData.companies.length > 0 && { companies: discogsData.companies }),
+      ...(discogsData.discogsUrl && { discogsUrl: discogsData.discogsUrl }),
+      ...(discogsData.discogsId && { discogsId: discogsData.discogsId }),
+      ...(discogsData.lowestPrice != null && { lowestPrice: discogsData.lowestPrice }),
+      ...(discogsData.numForSale != null && { numForSale: discogsData.numForSale }),
+      ...(discogsData.community && {
+        communityHave: discogsData.community.have,
+        communityWant: discogsData.community.want,
+      }),
+    }),
   };
 
   console.log('[Gemini] ✅ Analysis complete:', {

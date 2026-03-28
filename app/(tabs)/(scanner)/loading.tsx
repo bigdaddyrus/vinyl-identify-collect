@@ -18,6 +18,26 @@ import { getRandomMockResult } from '@/mock/analysisData';
 import { analyzeImages } from '@/services/geminiVision';
 import { searchByBarcode } from '@/services/discogs';
 import type { DiscogsResult } from '@/services/discogs';
+
+/** Merge Discogs enrichment fields into an AnalysisResult (used for mock/fallback paths) */
+function mergeDiscogsData(result: AnalysisResult, discogs: DiscogsResult | null): void {
+  if (!discogs) return;
+  if (discogs.thumbnail) result.discogsThumbnail = discogs.thumbnail;
+  if (discogs.primaryImage) result.discogsImage = discogs.primaryImage;
+  if (discogs.discogsImages.length > 0) result.discogsImages = discogs.discogsImages;
+  if (discogs.styles.length > 0) result.styles = discogs.styles;
+  if (discogs.weight) result.weight = discogs.weight;
+  if (discogs.tracklist.length > 0) result.discogsTracklist = discogs.tracklist;
+  if (discogs.companies.length > 0) result.companies = discogs.companies;
+  if (discogs.discogsUrl) result.discogsUrl = discogs.discogsUrl;
+  if (discogs.discogsId) result.discogsId = discogs.discogsId;
+  if (discogs.lowestPrice != null) result.lowestPrice = discogs.lowestPrice;
+  if (discogs.numForSale != null) result.numForSale = discogs.numForSale;
+  if (discogs.community) {
+    result.communityHave = discogs.community.have;
+    result.communityWant = discogs.community.want;
+  }
+}
 import { useAppStore } from '@/store/useAppStore';
 import { useScanCart } from '@/context/ScanCartContext';
 import { AnalysisResult, CapturedImage } from '@/types';
@@ -206,6 +226,7 @@ export default function LoadingScreen() {
               result.imageUri = imageUri;
               result.images = parsedCart.map((img) => img.uri);
               if (params.barcode) result.barcode = params.barcode;
+              mergeDiscogsData(result, discogsData);
             } else {
               throw apiError;
             }
@@ -213,6 +234,7 @@ export default function LoadingScreen() {
         } else {
           result = getRandomMockResult();
           if (params.barcode) result.barcode = params.barcode;
+          mergeDiscogsData(result, discogsData);
         }
 
         apiResultRef.current = result;
