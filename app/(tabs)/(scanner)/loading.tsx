@@ -29,6 +29,7 @@ function mergeDiscogsData(result: AnalysisResult, discogs: DiscogsResult | null)
   if (discogs.weight) result.weight = discogs.weight;
   if (discogs.tracklist.length > 0) result.discogsTracklist = discogs.tracklist;
   if (discogs.companies.length > 0) result.companies = discogs.companies;
+  if (discogs.extraArtists.length > 0) result.extraArtists = discogs.extraArtists;
   if (discogs.discogsUrl) result.discogsUrl = discogs.discogsUrl;
   if (discogs.discogsId) result.discogsId = discogs.discogsId;
   if (discogs.lowestPrice != null) result.lowestPrice = discogs.lowestPrice;

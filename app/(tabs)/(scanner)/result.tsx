@@ -29,7 +29,7 @@ import { GradientButton } from '@/components/GradientButton';
 import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
-import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompanyEntry } from '@/types';
+import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
 import { getDisplayName } from '@/data/countryCoordinates';
@@ -297,7 +297,7 @@ function TracklistAccordion({ tracks }: { tracks: DiscogsTrackEntry[] }) {
     <AccordionSection title="Tracklist" icon="list">
       {tracks.map((track, index) => (
         <View
-          key={index}
+          key={`${track.position}-${track.title}`}
           style={[
             tracklistStyles.row,
             index < tracks.length - 1 && tracklistStyles.rowBorder,
@@ -349,10 +349,10 @@ const tracklistStyles = StyleSheet.create({
 // ── Companies Accordion ─────────────────────────────────────
 function CompaniesAccordion({ companies }: { companies: DiscogsCompanyEntry[] }) {
   return (
-    <AccordionSection title="Credits & Companies" icon="business">
+    <AccordionSection title="Companies" icon="business">
       {companies.map((company, index) => (
         <View
-          key={index}
+          key={`${company.role}-${company.name}-${company.catno || index}`}
           style={[
             companiesStyles.row,
             index < companies.length - 1 && companiesStyles.rowBorder,
@@ -360,6 +360,26 @@ function CompaniesAccordion({ companies }: { companies: DiscogsCompanyEntry[] })
         >
           <Text style={companiesStyles.role}>{company.role}</Text>
           <Text style={companiesStyles.name}>{company.name}</Text>
+        </View>
+      ))}
+    </AccordionSection>
+  );
+}
+
+// ── Extra Artists Accordion ─────────────────────────────────
+function ExtraArtistsAccordion({ artists }: { artists: DiscogsExtraArtistEntry[] }) {
+  return (
+    <AccordionSection title="Credits" icon="people">
+      {artists.map((artist, index) => (
+        <View
+          key={`${artist.role}-${artist.name}`}
+          style={[
+            companiesStyles.row,
+            index < artists.length - 1 && companiesStyles.rowBorder,
+          ]}
+        >
+          <Text style={companiesStyles.role}>{artist.role}</Text>
+          <Text style={companiesStyles.name}>{artist.name}</Text>
         </View>
       ))}
     </AccordionSection>
@@ -444,7 +464,18 @@ function MarketplaceInfo({
       {discogsUrl && (
         <TouchableOpacity
           style={marketStyles.linkButton}
-          onPress={() => Linking.openURL(discogsUrl)}
+          onPress={async () => {
+            try {
+              const supported = await Linking.canOpenURL(discogsUrl);
+              if (supported) {
+                await Linking.openURL(discogsUrl);
+              } else {
+                Alert.alert('Cannot Open Link', 'Unable to open this Discogs URL.');
+              }
+            } catch {
+              Alert.alert('Error', 'Failed to open the link.');
+            }
+          }}
           activeOpacity={0.7}
         >
           <Ionicons name="open-outline" size={16} color={colors.accentPrimary} />
@@ -1142,6 +1173,13 @@ export default function ResultScreen() {
           </View>
         )}
 
+        {/* ── Extra Artists / Credits (Discogs) ── */}
+        {item.extraArtists && item.extraArtists.length > 0 && (
+          <View style={styles.detailsSection}>
+            <ExtraArtistsAccordion artists={item.extraArtists} />
+          </View>
+        )}
+
         {/* ── Companies (Discogs) ── */}
         {item.companies && item.companies.length > 0 && (
           <View style={styles.detailsSection}>
@@ -1150,15 +1188,20 @@ export default function ResultScreen() {
         )}
 
         {/* ── Marketplace (Discogs) ── */}
-        <View style={styles.detailsSection}>
-          <MarketplaceInfo
-            lowestPrice={item.lowestPrice}
-            numForSale={item.numForSale}
-            communityHave={item.communityHave}
-            communityWant={item.communityWant}
-            discogsUrl={item.discogsUrl}
-          />
-        </View>
+        {(item.lowestPrice != null ||
+          item.numForSale != null ||
+          item.communityHave != null ||
+          item.communityWant != null) && (
+          <View style={styles.detailsSection}>
+            <MarketplaceInfo
+              lowestPrice={item.lowestPrice}
+              numForSale={item.numForSale}
+              communityHave={item.communityHave}
+              communityWant={item.communityWant}
+              discogsUrl={item.discogsUrl}
+            />
+          </View>
+        )}
 
         {/* ── Detail Sections (flat, always visible) ── */}
         {item.extendedDetails && item.extendedDetails.length > 0 && (

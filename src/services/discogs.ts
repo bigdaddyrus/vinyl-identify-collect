@@ -26,6 +26,11 @@ export interface DiscogsImage {
   height: number;
 }
 
+export interface DiscogsExtraArtist {
+  name: string;
+  role: string;
+}
+
 export interface DiscogsResult {
   artist: string;
   title: string;
@@ -42,7 +47,8 @@ export interface DiscogsResult {
   discogsImages: DiscogsImage[]; // All images from Discogs release
   styles: string[];
   weight: string;
-  companies: DiscogsCompany[];
+  companies: DiscogsCompany[]; // Pressing plants, distributors, etc.
+  extraArtists: DiscogsExtraArtist[]; // Person credits (e.g. "Mastered By", "Producer")
   discogsUrl: string;
   discogsId: number;
   lowestPrice: number | null;
@@ -202,14 +208,19 @@ export async function searchByBarcode(barcode: string): Promise<DiscogsResult | 
       discogsImages: allDiscogsImages,
       styles: release.styles ?? [],
       weight,
-      companies: (release.extraartists ?? [])
-        .concat(release.companies ?? [])
-        .map((c: { name: string; role?: string; catno?: string; entity_type_name?: string }) => ({
+      companies: (release.companies ?? [])
+        .map((c: { name: string; catno?: string; entity_type_name?: string }) => ({
           name: c.name ?? '',
-          role: c.entity_type_name ?? c.role ?? '',
+          role: c.entity_type_name ?? '',
           catno: c.catno ?? '',
         }))
         .filter((c: DiscogsCompany) => c.name),
+      extraArtists: (release.extraartists ?? [])
+        .map((a: { name: string; role?: string }) => ({
+          name: a.name ?? '',
+          role: a.role ?? '',
+        }))
+        .filter((a: DiscogsExtraArtist) => a.name),
       discogsUrl: release.uri ?? '',
       discogsId: release.id ?? 0,
       lowestPrice: release.lowest_price ?? null,

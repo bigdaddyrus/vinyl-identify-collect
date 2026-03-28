@@ -304,6 +304,7 @@ export async function analyzeImages(
       ...(discogsData.weight && { weight: discogsData.weight }),
       ...(discogsData.tracklist.length > 0 && { discogsTracklist: discogsData.tracklist }),
       ...(discogsData.companies.length > 0 && { companies: discogsData.companies }),
+      ...(discogsData.extraArtists.length > 0 && { extraArtists: discogsData.extraArtists }),
       ...(discogsData.discogsUrl && { discogsUrl: discogsData.discogsUrl }),
       ...(discogsData.discogsId && { discogsId: discogsData.discogsId }),
       ...(discogsData.lowestPrice != null && { lowestPrice: discogsData.lowestPrice }),

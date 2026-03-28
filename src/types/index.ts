@@ -336,6 +336,12 @@ export interface DiscogsCompanyEntry {
   catno: string;
 }
 
+// Discogs extra artist credit (e.g. "Mastered By", "Producer")
+export interface DiscogsExtraArtistEntry {
+  name: string;
+  role: string;
+}
+
 // Analysis result from AI (or mock)
 export interface AnalysisResult {
   id: string;
@@ -371,7 +377,8 @@ export interface AnalysisResult {
   styles?: string[]; // Sub-genre styles (e.g. "Grunge", "Alternative Rock")
   weight?: string; // Vinyl weight (e.g. "180g")
   discogsTracklist?: DiscogsTrackEntry[]; // Full tracklist with positions/durations
-  companies?: DiscogsCompanyEntry[]; // Pressing plants, studios, etc.
+  companies?: DiscogsCompanyEntry[]; // Pressing plants, distributors, etc.
+  extraArtists?: DiscogsExtraArtistEntry[]; // Person credits (e.g. "Mastered By", "Producer")
   discogsUrl?: string; // Direct link to Discogs release page
   discogsId?: number; // Discogs release ID
   lowestPrice?: number; // Lowest marketplace price on Discogs
