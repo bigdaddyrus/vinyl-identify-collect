@@ -991,7 +991,7 @@ const styles = StyleSheet.create({
 
   // ── Core Info ──
   infoSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
   },
   itemName: {
@@ -1067,7 +1067,7 @@ const styles = StyleSheet.create({
 
   // ── Upsell CTA ──
   upsellSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
   },
   upsellButton: {
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
 
   // ── Vibe Pairing ──
   vibePairingSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
   },
   vibePairingCard: {
@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
 
   // ── Food & Drink Pairing ──
   pairingSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     gap: spacing.sm,
   },
@@ -1166,7 +1166,7 @@ const styles = StyleSheet.create({
 
   // ── Description ──
   descriptionSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
@@ -1179,7 +1179,7 @@ const styles = StyleSheet.create({
 
   // ── Detail Sections ──
   detailsSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
 
@@ -1199,7 +1199,7 @@ const styles = StyleSheet.create({
   bottomBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
