@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -60,10 +60,22 @@ export default function HomeScreen() {
     }
   };
 
-  // Get up to 3 recent collection images for the stacked display
-  const stackImages = collection
-    .filter((item) => item.imageUri)
-    .slice(0, 3);
+  // Shuffle seed changes each time the component mounts (navigated to)
+  const [shuffleSeed] = useState(() => Math.random());
+
+  // Shuffle collection items for the stacked display using Fisher-Yates
+  const stackImages = useMemo(() => {
+    const withImages = collection.filter((item) => item.imageUri);
+    const shuffled = [...withImages];
+    // Seeded shuffle so it's stable during the same mount
+    let seed = shuffleSeed;
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      seed = (seed * 16807) % 2147483647;
+      const j = Math.floor((seed / 2147483647) * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, 3);
+  }, [collection, shuffleSeed]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

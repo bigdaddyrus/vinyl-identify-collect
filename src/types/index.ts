@@ -80,7 +80,8 @@ export interface CapturedImage {
 
 export interface ScanCart {
   images: CapturedImage[];
-  currentStep: 'front' | 'back' | 'label' | 'ready';
+  currentStep: 'barcode' | 'front' | 'back' | 'label' | 'ready';
+  barcode?: string;
 }
 
 export interface ResultLabels {
@@ -313,6 +314,14 @@ export interface ExtendedDetailSection {
   items: ExtendedDetailItem[];
 }
 
+// A named grouping of collection items (like a playlist)
+export interface CollectionSet {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // Analysis result from AI (or mock)
 export interface AnalysisResult {
   id: string;
@@ -332,9 +341,14 @@ export interface AnalysisResult {
   genre?: string; // Music genre (e.g. "Rock", "Jazz", "Electronic")
   rarity?: string; // e.g. 'Very Common', 'Common', 'Uncommon', 'Rare', 'Very Rare', 'Extremely Rare'
   condition?: string; // e.g. 'Mint', 'AU', 'VF', 'F', 'VG', 'G', 'Fair', 'Poor', 'Uncertain'
+  barcode?: string; // EAN/UPC barcode from physical record sleeve
+  vibePairing?: string; // Evocative listening recommendation (e.g. "Late-night drive with the windows down")
+  foodPairing?: string; // Food pairing suggestion (e.g. "Slow-smoked brisket with cornbread")
+  drinkPairing?: string; // Drink pairing suggestion (e.g. "Bourbon old fashioned")
   albumArtQuery?: string; // Search query for scraping official album art (e.g. "Artist - Album - Year")
   collectionDate?: number; // Editable collection date (defaults to createdAt)
   notes?: string; // User-editable notes
+  setIds?: string[]; // IDs of sets this item belongs to
   extendedDetails?: ExtendedDetailSection[];
 }
 
@@ -356,6 +370,9 @@ export interface AppStore {
   // Collection state
   collection: AnalysisResult[];
   scanCount: number;
+
+  // Sets state
+  sets: CollectionSet[];
 
   // ASO state
   hasTriggeredReview: boolean;
@@ -388,5 +405,16 @@ export interface AppStore {
   setSyncing: (isSyncing: boolean) => void;
   setLastSyncedAt: (timestamp: number) => void;
   clearAllData: () => Promise<void>;
+
+  // Set actions
+  createSet: (name: string) => CollectionSet;
+  renameSet: (id: string, name: string) => void;
+  deleteSet: (id: string) => void;
+  addItemToSet: (itemId: string, setId: string) => void;
+  removeItemFromSet: (itemId: string, setId: string) => void;
+  addItemsToSet: (itemId: string, setIds: string[]) => void;
+  getItemsInSet: (setId: string) => AnalysisResult[];
+  getSetValue: (setId: string) => number;
+
   resetApp: () => void; // For testing
 }

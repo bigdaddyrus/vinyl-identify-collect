@@ -74,6 +74,7 @@ export default function ScannerLayout() {
             animation: 'slide_from_bottom',
           }}
         />
+        <Stack.Screen name="setdetail" />
       </Stack>
     </ScanCartProvider>
   );

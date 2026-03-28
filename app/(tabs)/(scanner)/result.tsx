@@ -7,16 +7,25 @@ import {
   ScrollView,
   Alert,
   Dimensions,
+  Modal,
+  StatusBar,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientButton } from '@/components/GradientButton';
+import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { AnalysisResult, ExtendedDetailSection } from '@/types';
@@ -281,16 +290,158 @@ const feedbackStyles = StyleSheet.create({
   },
 });
 
+// ── Fullscreen Image Viewer ──────────────────────────────────
+const AnimatedImage = Animated.createAnimatedComponent(Image);
+
+function FullscreenViewer({
+  visible,
+  uri,
+  onClose,
+}: {
+  visible: boolean;
+  uri: string;
+  onClose: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const resetTransform = () => {
+    scale.value = withTiming(1);
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedScale.value = 1;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+  };
+
+  const pinch = Gesture.Pinch()
+    .onStart(() => {
+      savedScale.value = scale.value;
+    })
+    .onUpdate((e) => {
+      scale.value = Math.max(1, Math.min(5, savedScale.value * e.scale));
+    })
+    .onEnd(() => {
+      if (scale.value < 1.1) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        savedScale.value = scale.value;
+      }
+    });
+
+  const pan = Gesture.Pan()
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
+    .onUpdate((e) => {
+      if (scale.value > 1) {
+        translateX.value = savedTranslateX.value + e.translationX;
+        translateY.value = savedTranslateY.value + e.translationY;
+      }
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1.5) {
+        scale.value = withTiming(1);
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        scale.value = withTiming(3);
+        savedScale.value = 3;
+      }
+    });
+
+  const composed = Gesture.Simultaneous(pinch, pan, doubleTap);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const handleClose = () => {
+    resetTransform();
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <StatusBar barStyle="light-content" />
+      <GestureHandlerRootView style={fullscreenStyles.container}>
+        <TouchableOpacity
+          style={fullscreenStyles.closeButton}
+          onPress={handleClose}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={28} color={colors.white} />
+        </TouchableOpacity>
+        <GestureDetector gesture={composed}>
+          <AnimatedImage
+            source={{ uri }}
+            style={[fullscreenStyles.image, animatedStyle]}
+            contentFit="contain"
+          />
+        </GestureDetector>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+const fullscreenStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  image: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.8,
+  },
+});
+
 // ── Main Result Screen ──────────────────────────────────────
 export default function ResultScreen() {
   const params = useLocalSearchParams();
   const addToCollection = useAppStore((state) => state.addToCollection);
   const removeFromCollection = useAppStore((state) => state.removeFromCollection);
+  const updateCollectionItem = useAppStore((state) => state.updateCollectionItem);
   const hasTriggeredReview = useAppStore((state) => state.hasTriggeredReview);
   const collection = useAppStore((state) => state.collection);
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
+  const [showSetPicker, setShowSetPicker] = useState(false);
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -389,7 +540,7 @@ export default function ResultScreen() {
           style: 'destructive',
           onPress: () => {
             removeFromCollection(item.id);
-            router.back();
+            navigateBack();
           },
         },
       ]
@@ -409,13 +560,25 @@ export default function ResultScreen() {
     });
   };
 
+  const navigateBack = useCallback(() => {
+    const source = params.source as string | undefined;
+    if (source?.startsWith('portfolio-')) {
+      const tab = source.replace('portfolio-', '');
+      router.navigate({ pathname: '/(tabs)/portfolio', params: { tab } });
+    } else if (source?.startsWith('setdetail:')) {
+      const sid = source.replace('setdetail:', '');
+      router.navigate({ pathname: '/(tabs)/(scanner)/setdetail', params: { setId: sid } });
+    } else {
+      router.back();
+    }
+  }, [params.source]);
+
   const handleBack = () => {
     triggerButtonPress();
     if (pendingSave) {
-      // Remove temporarily saved item if user backs out without saving
       removeFromCollection(item.id);
     }
-    router.back();
+    navigateBack();
   };
 
   const handleEdit = () => {
@@ -433,9 +596,13 @@ export default function ResultScreen() {
 
   const handleHeaderKebab = () => {
     triggerButtonPress();
-    const options: { text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }[] = [
-      { text: 'Edit', onPress: handleEdit },
-    ];
+    const options: { text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }[] = [];
+
+    if (isInCollection && !pendingSave) {
+      options.push({ text: 'Add to Set', onPress: () => setShowSetPicker(true) });
+    }
+
+    options.push({ text: 'Edit', onPress: handleEdit });
 
     if (isInCollection && !pendingSave) {
       options.push({
@@ -452,7 +619,7 @@ export default function ResultScreen() {
                 style: 'destructive',
                 onPress: () => {
                   removeFromCollection(item.id);
-                  router.back();
+                  navigateBack();
                 },
               },
             ]
@@ -464,6 +631,8 @@ export default function ResultScreen() {
     options.push({ text: 'Cancel', style: 'cancel' });
     Alert.alert(item.name, undefined, options);
   };
+
+  const currentSetIds = storeItem?.setIds ?? paramResult.setIds ?? [];
 
   // Format collection date
   const collectionDateStr = item.collectionDate
@@ -507,9 +676,14 @@ export default function ResultScreen() {
               style={styles.carousel}
             >
               {imageList.map((uri, i) => (
-                <View key={`img-${i}`} style={styles.carouselItem}>
+                <TouchableOpacity
+                  key={`img-${i}`}
+                  style={styles.carouselItem}
+                  onPress={() => setFullscreenUri(uri)}
+                  activeOpacity={0.9}
+                >
                   <Image source={{ uri }} style={styles.carouselImage} contentFit="contain" />
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           ) : (
@@ -557,6 +731,12 @@ export default function ResultScreen() {
               <Ionicons name="calendar" size={12} color={colors.iconMuted} />
               <Text style={styles.chipText}>{item.year}</Text>
             </View>
+            {item.barcode && (
+              <View style={styles.chip}>
+                <Ionicons name="barcode" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{item.barcode}</Text>
+              </View>
+            )}
           </View>
 
           {/* Key-value rows: Grade, Date */}
@@ -604,6 +784,44 @@ export default function ResultScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.iconSubtle} />
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Vibe Pairing ── */}
+        {item.vibePairing && (
+          <View style={styles.vibePairingSection}>
+            <View style={styles.vibePairingCard}>
+              <Ionicons name="headset" size={18} color={colors.accentPrimary} />
+              <Text style={styles.vibePairingText}>{item.vibePairing}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── Food & Drink Pairing ── */}
+        {(item.foodPairing || item.drinkPairing) && (
+          <View style={styles.pairingSection}>
+            {item.foodPairing && (
+              <View style={styles.pairingRow}>
+                <View style={styles.pairingIconBox}>
+                  <Ionicons name="restaurant" size={16} color={colors.accentPrimary} />
+                </View>
+                <View style={styles.pairingContent}>
+                  <Text style={styles.pairingLabel}>Food</Text>
+                  <Text style={styles.pairingValue}>{item.foodPairing}</Text>
+                </View>
+              </View>
+            )}
+            {item.drinkPairing && (
+              <View style={styles.pairingRow}>
+                <View style={styles.pairingIconBox}>
+                  <Ionicons name="wine" size={16} color={colors.accentPrimary} />
+                </View>
+                <View style={styles.pairingContent}>
+                  <Text style={styles.pairingLabel}>Drink</Text>
+                  <Text style={styles.pairingValue}>{item.drinkPairing}</Text>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -663,6 +881,24 @@ export default function ResultScreen() {
           </SafeAreaView>
         </View>
       </View>
+
+      {/* ── Fullscreen Image Viewer ── */}
+      <FullscreenViewer
+        visible={!!fullscreenUri}
+        uri={fullscreenUri ?? ''}
+        onClose={() => setFullscreenUri(null)}
+      />
+
+      {/* Set Picker Modal */}
+      <SetPickerModal
+        visible={showSetPicker}
+        selectedSetIds={currentSetIds}
+        onDone={(ids) => {
+          updateCollectionItem(item.id, { setIds: ids });
+          setShowSetPicker(false);
+        }}
+        onClose={() => setShowSetPicker(false)}
+      />
     </View>
   );
 }
@@ -755,7 +991,7 @@ const styles = StyleSheet.create({
 
   // ── Core Info ──
   infoSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
   },
   itemName: {
@@ -831,7 +1067,7 @@ const styles = StyleSheet.create({
 
   // ── Upsell CTA ──
   upsellSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
   },
   upsellButton: {
@@ -860,9 +1096,77 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // ── Vibe Pairing ──
+  vibePairingSection: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+  },
+  vibePairingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accentSurface,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  vibePairingText: {
+    flex: 1,
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontWeight: '500',
+    color: colors.accentPrimary,
+    lineHeight: 20,
+  },
+
+  // ── Food & Drink Pairing ──
+  pairingSection: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  pairingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  pairingIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.accentHighlight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pairingContent: {
+    flex: 1,
+  },
+  pairingLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  pairingValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textPrimary,
+    lineHeight: 20,
+  },
+
   // ── Description ──
   descriptionSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
@@ -875,7 +1179,7 @@ const styles = StyleSheet.create({
 
   // ── Detail Sections ──
   detailsSection: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
 
@@ -895,7 +1199,7 @@ const styles = StyleSheet.create({
   bottomBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },

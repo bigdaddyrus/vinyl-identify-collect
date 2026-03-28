@@ -3,13 +3,16 @@ import { CapturedImage, ScanCart } from '@/types';
 
 const INITIAL_CART: ScanCart = {
   images: [],
-  currentStep: 'front',
+  currentStep: 'barcode',
 };
 
 interface ScanCartContextValue {
   cart: ScanCart;
   addImage: (img: CapturedImage) => void;
   removeImage: (type: CapturedImage['type']) => void;
+  setBarcode: (code: string) => void;
+  skipBarcode: () => void;
+  rescanBarcode: () => void;
   resetCart: () => void;
 }
 
@@ -38,15 +41,27 @@ export function ScanCartProvider({ children }: { children: ReactNode }) {
       // Replace if same type already exists, then normalize to deterministic order
       const filtered = prev.images.filter((existing) => existing.type !== img.type);
       const next = sortByType([...filtered, img]);
-      return { images: next, currentStep: getNextStep(next) };
+      return { ...prev, images: next, currentStep: getNextStep(next) };
     });
   }, []);
 
   const removeImage = useCallback((type: CapturedImage['type']) => {
     setCart((prev) => {
       const next = sortByType(prev.images.filter((img) => img.type !== type));
-      return { images: next, currentStep: getNextStep(next) };
+      return { ...prev, images: next, currentStep: getNextStep(next) };
     });
+  }, []);
+
+  const setBarcode = useCallback((code: string) => {
+    setCart((prev) => ({ ...prev, barcode: code, currentStep: 'front' }));
+  }, []);
+
+  const skipBarcode = useCallback(() => {
+    setCart((prev) => ({ ...prev, currentStep: 'front' }));
+  }, []);
+
+  const rescanBarcode = useCallback(() => {
+    setCart((prev) => ({ ...prev, barcode: undefined, currentStep: 'barcode' }));
   }, []);
 
   const resetCart = useCallback(() => {
@@ -54,7 +69,7 @@ export function ScanCartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ScanCartContext.Provider value={{ cart, addImage, removeImage, resetCart }}>
+    <ScanCartContext.Provider value={{ cart, addImage, removeImage, setBarcode, skipBarcode, rescanBarcode, resetCart }}>
       {children}
     </ScanCartContext.Provider>
   );

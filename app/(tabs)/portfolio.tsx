@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput } from 'react-native';
+import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { Image } from 'expo-image';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CollectionHeader } from '@/components/CollectionHeader';
 import { CollectionCard } from '@/components/CollectionCard';
@@ -9,14 +10,26 @@ import { SpotlightCarousel } from '@/components/SpotlightCarousel';
 import { WorldMapPreview } from '@/components/WorldMapPreview';
 import { PillTabSwitcher } from '@/components/PillTabSwitcher';
 import { GoldenGlow } from '@/components/GoldenGlow';
+import { BulkMoveModal } from '@/components/BulkMoveModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
-import { AnalysisResult } from '@/types';
+import { AnalysisResult, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { exportCollectionToPDF } from '@/utils/pdf';
+import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
+
+const DEFAULT_TAB_BAR_STYLE = {
+  backgroundColor: '#0A0A0A',
+  borderTopWidth: 0,
+  paddingTop: 8,
+  paddingBottom: 8,
+  height: 70,
+} as const;
 
 export default function PortfolioScreen() {
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const navigation = useNavigation();
   const collection = useAppStore((state) => state.collection);
   const getTotalPortfolioValue = useAppStore((state) => state.getTotalPortfolioValue);
   const getUniqueOrigins = useAppStore((state) => state.getUniqueOrigins);
@@ -26,12 +39,36 @@ export default function PortfolioScreen() {
   const getOriginDistribution = useAppStore((state) => state.getOriginDistribution);
   const removeFromCollection = useAppStore((state) => state.removeFromCollection);
   const clearAllData = useAppStore((state) => state.clearAllData);
+  const sets = useAppStore((state) => state.sets);
+  const createSet = useAppStore((state) => state.createSet);
+  const renameSet = useAppStore((state) => state.renameSet);
+  const deleteSet = useAppStore((state) => state.deleteSet);
+  const getItemsInSet = useAppStore((state) => state.getItemsInSet);
+  const getSetValue = useAppStore((state) => state.getSetValue);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState(appConfig.collection.tabs[0].key);
+  const [activeTab, setActiveTab] = useState(tab ?? appConfig.collection.tabs[0].key);
+
+  useEffect(() => {
+    if (tab) setActiveTab(tab);
+  }, [tab]);
+
   const [sortBy, setSortBy] = useState('Highest Value');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showPageMenu, setShowPageMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCreateSet, setShowCreateSet] = useState(false);
+  const [newSetName, setNewSetName] = useState('');
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkMove, setShowBulkMove] = useState(false);
+
+  useLayoutEffect(() => {
+    navigation.getParent()?.setOptions({
+      tabBarStyle: isSelecting
+        ? { display: 'none' as const }
+        : DEFAULT_TAB_BAR_STYLE,
+    });
+  }, [isSelecting, navigation]);
 
   const totalValue = getTotalPortfolioValue();
   const originCount = getUniqueOrigins();
@@ -71,10 +108,85 @@ export default function PortfolioScreen() {
     }
   };
 
+  const exitSelectionMode = useCallback(() => {
+    setIsSelecting(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleSelectItem = useCallback((itemId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    const sorted = getSortedCollection();
+    if (selectedIds.size === sorted.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sorted.map((i) => i.id)));
+    }
+  }, [selectedIds.size, collection, sortBy, searchQuery]);
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    triggerButtonPress();
+    Alert.alert(
+      'Delete Items',
+      `Remove ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} from your collection?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            for (const id of selectedIds) {
+              removeFromCollection(id);
+            }
+            exitSelectionMode();
+          },
+        },
+      ]
+    );
+  };
+
+  const runBulkExport = async (exportFn: (items: AnalysisResult[]) => Promise<void | string>) => {
+    setIsExporting(true);
+    try {
+      const items = collection.filter((i) => selectedIds.has(i.id));
+      await exportFn(items);
+    } catch {
+      Alert.alert('Export Failed', 'Unable to export. Please try again.', [{ text: 'OK' }]);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleBulkExport = () => {
+    if (selectedIds.size === 0) return;
+    triggerButtonPress();
+    Alert.alert(
+      'Export Format',
+      `Export ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} as:`,
+      [
+        { text: 'PDF', onPress: () => runBulkExport(exportCollectionToPDF) },
+        { text: 'JSON', onPress: () => runBulkExport(exportCollectionAsJSON) },
+        { text: 'Images (ZIP)', onPress: () => runBulkExport(exportImageAssetsZip) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleItemPress = (item: AnalysisResult) => {
     router.push({
       pathname: '/(tabs)/(scanner)/result',
-      params: { resultData: JSON.stringify(item) },
+      params: { resultData: JSON.stringify(item), source: `portfolio-${activeTab}` },
     });
   };
 
@@ -161,48 +273,207 @@ export default function PortfolioScreen() {
     </View>
   );
 
-  const renderAllTab = () => (
-    <View style={styles.allContainer}>
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={16} color={colors.textTertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search records..."
-          placeholderTextColor={colors.textTertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-          </TouchableOpacity>
+  const renderAllTab = () => {
+    const sortedItems = getSortedCollection();
+    const allSelected = sortedItems.length > 0 && selectedIds.size === sortedItems.length;
+
+    return (
+      <View style={styles.allContainer}>
+        {isSelecting ? (
+          /* Selection header */
+          <View style={styles.selectionHeader}>
+            <TouchableOpacity
+              style={styles.selectAllRow}
+              onPress={handleSelectAll}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.bulkCheckbox, allSelected && styles.bulkCheckboxActive]}>
+                {allSelected && <Ionicons name="checkmark" size={16} color={colors.white} />}
+              </View>
+              <Text style={styles.selectAllText}>Select All ({sortedItems.length})</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={exitSelectionMode} activeOpacity={0.7}>
+              <Text style={styles.cancelSelectText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={16} color={colors.textTertiary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search records..."
+                placeholderTextColor={colors.textTertiary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                  <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Sort/Filter Row + Bulk Action */}
+            <View style={styles.sortRow}>
+              {appConfig.collection.sortOptions && (
+                <TouchableOpacity
+                  style={styles.sortButton}
+                  activeOpacity={0.7}
+                  onPress={() => setShowSortMenu(true)}
+                >
+                  <Ionicons name="funnel-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.sortText}>{sortBy}</Text>
+                  <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.bulkSelectButton}
+                activeOpacity={0.7}
+                onPress={() => {
+                  triggerButtonPress();
+                  setIsSelecting(true);
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.textSecondary} />
+                <Text style={styles.sortText}>Select</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </View>
+    );
+  };
 
-      {/* Sort/Filter Row */}
-      {appConfig.collection.sortOptions && (
-        <View style={styles.sortRow}>
-          <TouchableOpacity
-            style={styles.sortButton}
-            activeOpacity={0.7}
-            onPress={() => setShowSortMenu(true)}
-          >
-            <Ionicons name="funnel-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.sortText}>{sortBy}</Text>
-            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
-          </TouchableOpacity>
+  const handleCreateSet = () => {
+    const trimmed = newSetName.trim();
+    if (!trimmed) return;
+    createSet(trimmed);
+    setNewSetName('');
+    setShowCreateSet(false);
+  };
+
+  const handleSetKebab = (s: CollectionSet) => {
+    triggerButtonPress();
+    Alert.alert(
+      s.name,
+      undefined,
+      [
+        {
+          text: 'Rename',
+          onPress: () => {
+            Alert.prompt(
+              'Rename Set',
+              undefined,
+              (text) => {
+                const trimmed = text?.trim();
+                if (trimmed) renameSet(s.id, trimmed);
+              },
+              'plain-text',
+              s.name
+            );
+          },
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Set',
+              `Delete "${s.name}"? Items will stay in your collection.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteSet(s.id) },
+              ]
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const renderSetCard = (setItem: CollectionSet) => {
+    const items = getItemsInSet(setItem.id);
+    const value = getSetValue(setItem.id);
+    const coverUri = items[0]?.imageUri;
+    const updatedDate = new Date(setItem.updatedAt).toLocaleDateString();
+
+    return (
+      <TouchableOpacity
+        key={setItem.id}
+        style={styles.setCard}
+        activeOpacity={0.7}
+        onPress={() => {
+          router.push({
+            pathname: '/(tabs)/(scanner)/setdetail',
+            params: { setId: setItem.id },
+          });
+        }}
+      >
+        {/* Cover image */}
+        <View style={styles.setCoverWrap}>
+          {coverUri ? (
+            <Image source={{ uri: coverUri }} style={styles.setCoverImage} contentFit="cover" />
+          ) : (
+            <View style={styles.setCoverPlaceholder}>
+              <Ionicons name="albums" size={32} color={colors.border} />
+            </View>
+          )}
         </View>
-      )}
-    </View>
-  );
+
+        {/* Info */}
+        <View style={styles.setCardInfo}>
+          <View style={styles.setValueRow}>
+            <Text style={styles.setValueText}>
+              ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+            <Text style={styles.setItemCount}> · {items.length} {items.length === 1 ? 'record' : 'records'}</Text>
+          </View>
+          <Text style={styles.setCardName} numberOfLines={1}>{setItem.name}</Text>
+          <View style={styles.setFooterRow}>
+            <Text style={styles.setUpdatedText}>Updated: {updatedDate}</Text>
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                handleSetKebab(setItem);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.5}
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderSetsTab = () => (
     <View style={styles.setsContainer}>
-      <Ionicons name="grid-outline" size={48} color={colors.border} />
-      <Text style={styles.setsPlaceholder}>Sets coming soon</Text>
+      {/* Create New Set button */}
+      <TouchableOpacity
+        style={styles.createSetButton}
+        onPress={() => setShowCreateSet(true)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="add-circle" size={22} color={colors.accentPrimary} />
+        <Text style={styles.createSetText}>Create New Set</Text>
+      </TouchableOpacity>
+
+      {/* Set cards */}
+      {sets.length > 0 ? (
+        sets.map(renderSetCard)
+      ) : (
+        <View style={styles.setsEmptyState}>
+          <Ionicons name="albums-outline" size={48} color={colors.border} />
+          <Text style={styles.setsEmptyText}>No sets yet</Text>
+          <Text style={styles.setsEmptySubtext}>Create a set to group your records</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -263,11 +534,37 @@ export default function PortfolioScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           activeTab === 'all' ? (
-            <CollectionCard
-              item={item}
-              onPress={() => handleItemPress(item)}
-              onKebabPress={() => handleKebabPress(item)}
-            />
+            <View style={styles.selectableRow}>
+              {isSelecting && (
+                <TouchableOpacity
+                  style={styles.bulkCheckboxWrap}
+                  onPress={() => toggleSelectItem(item.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.bulkCheckbox, selectedIds.has(item.id) && styles.bulkCheckboxActive]}>
+                    {selectedIds.has(item.id) && <Ionicons name="checkmark" size={16} color={colors.white} />}
+                  </View>
+                </TouchableOpacity>
+              )}
+              <View style={styles.selectableCardWrap}>
+                <CollectionCard
+                  item={item}
+                  onPress={() => {
+                    if (isSelecting) {
+                      toggleSelectItem(item.id);
+                    } else {
+                      handleItemPress(item);
+                    }
+                  }}
+                  onKebabPress={isSelecting ? undefined : () => handleKebabPress(item)}
+                  onLongPress={!isSelecting ? () => {
+                    triggerButtonPress();
+                    setIsSelecting(true);
+                    setSelectedIds(new Set([item.id]));
+                  } : undefined}
+                />
+              </View>
+            </View>
           ) : null
         )}
         ListHeaderComponent={
@@ -371,6 +668,79 @@ export default function PortfolioScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Create Set modal */}
+      <Modal
+        visible={showCreateSet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCreateSet(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.createSetOverlay}
+        >
+          <Pressable style={styles.createSetOverlayPress} onPress={() => setShowCreateSet(false)} />
+          <View style={styles.createSetSheet}>
+            <Text style={styles.createSetTitle}>New Set</Text>
+            <TextInput
+              style={styles.createSetInput}
+              value={newSetName}
+              onChangeText={setNewSetName}
+              placeholder="Set name"
+              placeholderTextColor={colors.textTertiary}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleCreateSet}
+            />
+            <TouchableOpacity
+              style={[styles.createSetDone, !newSetName.trim() && styles.createSetDoneDisabled]}
+              onPress={handleCreateSet}
+              disabled={!newSetName.trim()}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.createSetDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Bulk action bottom bar */}
+      {isSelecting && (
+        <SafeAreaView edges={['bottom']} style={styles.bulkActionBar}>
+          <TouchableOpacity style={styles.bulkAction} onPress={handleBulkDelete} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={22} color={colors.error} />
+            <Text style={[styles.bulkActionText, { color: colors.error }]}>Delete</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bulkAction}
+            onPress={() => {
+              if (selectedIds.size === 0) return;
+              triggerButtonPress();
+              setShowBulkMove(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="cube-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.bulkActionText}>Move</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bulkAction} onPress={handleBulkExport} activeOpacity={0.7}>
+            <Ionicons name="download-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.bulkActionText}>Export</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
+
+      {/* Bulk Move Modal */}
+      <BulkMoveModal
+        visible={showBulkMove}
+        itemIds={Array.from(selectedIds)}
+        onDone={() => {
+          setShowBulkMove(false);
+          exitSelectionMode();
+        }}
+        onClose={() => setShowBulkMove(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -417,10 +787,20 @@ const styles = StyleSheet.create({
   },
   sortRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.sm,
   },
   sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.round,
+  },
+  bulkSelectButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -476,14 +856,147 @@ const styles = StyleSheet.create({
   },
   // Sets tab
   setsContainer: {
+    marginBottom: spacing.md,
+  },
+  createSetButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xxl * 2,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    borderRadius: borderRadius.md,
+    borderStyle: 'dashed',
+    backgroundColor: colors.accentSurface,
   },
-  setsPlaceholder: {
-    ...typography.body,
+  createSetText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+  },
+  setCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  setCoverWrap: {
+    width: 100,
+    height: 100,
+  },
+  setCoverImage: {
+    width: 100,
+    height: 100,
+  },
+  setCoverPlaceholder: {
+    width: 100,
+    height: 100,
+    backgroundColor: colors.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setCardInfo: {
+    flex: 1,
+    padding: spacing.md,
+    justifyContent: 'center',
+  },
+  setValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  setValueText: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'PlayfairDisplay_700Bold',
+    color: colors.accentPrimary,
+  },
+  setItemCount: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  setCardName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textPrimary,
+    marginTop: 4,
+  },
+  setFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  setUpdatedText: {
+    fontSize: 12,
     color: colors.textTertiary,
+  },
+  setsEmptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  setsEmptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontWeight: '500',
     marginTop: spacing.md,
+  },
+  setsEmptySubtext: {
+    ...typography.caption,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+  // Create Set modal
+  createSetOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  createSetOverlayPress: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  createSetSheet: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.lg,
+    marginHorizontal: spacing.xl,
+    padding: spacing.xl,
+  },
+  createSetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  createSetInput: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
+  },
+  createSetDone: {
+    backgroundColor: colors.accentPrimary,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  createSetDoneDisabled: {
+    opacity: 0.4,
+  },
+  createSetDoneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
   },
   // Empty state
   emptyState: {
@@ -548,5 +1061,73 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.error,
     fontWeight: '600',
+  },
+  // Selection mode
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  selectAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  selectAllText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+  },
+  cancelSelectText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  selectableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectableCardWrap: {
+    flex: 1,
+  },
+  bulkCheckboxWrap: {
+    paddingRight: spacing.sm,
+    justifyContent: 'center',
+  },
+  bulkCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkCheckboxActive: {
+    backgroundColor: colors.accentPrimary,
+    borderColor: colors.accentPrimary,
+  },
+  // Bulk action bar
+  bulkActionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.background,
+  },
+  bulkAction: {
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.lg,
+  },
+  bulkActionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textPrimary,
   },
 });

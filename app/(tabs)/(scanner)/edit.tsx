@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientButton } from '@/components/GradientButton';
+import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
@@ -43,6 +44,7 @@ function parseDate(str: string): number | null {
 export default function EditScreen() {
   const params = useLocalSearchParams();
   const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
+  const sets = useAppStore((s) => s.sets);
 
   let parsedItem: AnalysisResult | null = null;
   if (params.itemData) {
@@ -66,8 +68,10 @@ export default function EditScreen() {
     formatDate(item?.collectionDate ?? item?.createdAt ?? Date.now())
   );
   const [notes, setNotes] = useState(item?.notes ?? '');
+  const [setIds, setSetIds] = useState<string[]>(item?.setIds ?? []);
   const [showGradePicker, setShowGradePicker] = useState(false);
   const [showGenrePicker, setShowGenrePicker] = useState(false);
+  const [showSetPicker, setShowSetPicker] = useState(false);
 
   const gradeOptions = appConfig.collection.gradeOptions ?? [];
 
@@ -93,8 +97,17 @@ export default function EditScreen() {
       genre: genre || undefined,
       collectionDate: parsedDate ?? item.collectionDate ?? item.createdAt,
       notes: notes.trim() || undefined,
+      setIds,
     });
     router.back();
+  };
+
+  const getSetDisplayText = () => {
+    if (setIds.length === 0) return '';
+    return sets
+      .filter((s) => setIds.includes(s.id))
+      .map((s) => s.name)
+      .join(', ');
   };
 
   const handleClose = () => {
@@ -185,6 +198,24 @@ export default function EditScreen() {
             >
               <Text style={[styles.selectText, !genre && styles.placeholderText]}>
                 {genre || 'Select genre'}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Custom Set */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Custom Set</Text>
+            <TouchableOpacity
+              style={styles.selectRow}
+              onPress={() => setShowSetPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[styles.selectText, !setIds.length && styles.placeholderText]}
+                numberOfLines={1}
+              >
+                {getSetDisplayText() || 'Optional'}
               </Text>
               <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -331,6 +362,17 @@ export default function EditScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Set Picker Modal */}
+      <SetPickerModal
+        visible={showSetPicker}
+        selectedSetIds={setIds}
+        onDone={(ids) => {
+          setSetIds(ids);
+          setShowSetPicker(false);
+        }}
+        onClose={() => setShowSetPicker(false)}
+      />
     </View>
   );
 }
