@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -53,8 +53,10 @@ export default function LoadingScreen() {
   const collection = useAppStore((state) => state.collection);
   const { resetCart } = useScanCart();
 
-  // Parse cart images or fall back to legacy single imageUri
-  const parsedCart: CapturedImage[] = (() => {
+  // Parse cart images or fall back to legacy single imageUri.
+  // Memoized so the reference stays stable across re-renders — prevents the
+  // analysis useEffect from re-firing in an infinite loop.
+  const parsedCart: CapturedImage[] = useMemo(() => {
     if (params.cartImages) {
       try {
         return JSON.parse(params.cartImages);
@@ -69,7 +71,7 @@ export default function LoadingScreen() {
       return [{ type: 'front' as const, uri: params.imageUri }];
     }
     return [];
-  })();
+  }, [params.cartImages, params.imageUri]);
 
   const imageUri = parsedCart[0]?.uri || params.imageUri || '';
 
