@@ -234,6 +234,20 @@ export default function LoadingScreen() {
               throw apiError;
             }
           }
+        } else if (params.barcode && discogsData) {
+          // Barcode-only path: send Discogs data to Gemini without images
+          try {
+            result = await analyzeImages([], discogsData, params.barcode);
+          } catch (apiError) {
+            const message = apiError instanceof Error ? apiError.message : '';
+            if (message.includes('API key not configured')) {
+              result = getRandomMockResult();
+              if (params.barcode) result.barcode = params.barcode;
+              mergeDiscogsData(result, discogsData);
+            } else {
+              throw apiError;
+            }
+          }
         } else {
           result = getRandomMockResult();
           if (params.barcode) result.barcode = params.barcode;

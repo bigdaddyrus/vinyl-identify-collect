@@ -93,7 +93,7 @@ const PAIRING_INSTRUCTIONS = `
 "foodPairing": "A specific food that pairs with the mood/genre/era of this record (e.g. 'Slow-smoked brisket with cornbread', 'Fresh oysters with mignonette'). Max 100 characters.",
 "drinkPairing": "A specific drink that pairs with the mood/genre/era of this record (e.g. 'Bourbon old fashioned', 'Espresso martini', 'Chilled sake'). Max 100 characters."`;
 
-function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string): string {
+function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string, hasImages: boolean): string {
   const tracklistStr = discogsData.tracklist.length > 0
     ? discogsData.tracklist.slice(0, 10).map((t) => `${t.position} ${t.title}`.trim()).join(', ')
     : 'N/A';
@@ -101,6 +101,10 @@ function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: stri
   const stylesStr = discogsData.styles.length > 0
     ? discogsData.styles.join(', ')
     : 'N/A';
+
+  const instruction = hasImages
+    ? 'Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write pairing recommendations.'
+    : 'Using this reference data (no images provided), provide your best identification, estimate the market value for this specific pressing based on known data, and write pairing recommendations. Since no images are available, set condition to "Uncertain".';
 
   return `The following record has been identified via barcode lookup:
 Artist: ${discogsData.artist}
@@ -114,7 +118,7 @@ Country: ${discogsData.country}
 Formats: ${discogsData.formats.join(', ')}
 Tracklist: ${tracklistStr}
 
-Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write pairing recommendations.
+${instruction}
 
 ${basePrompt}
 
@@ -183,8 +187,9 @@ export async function analyzeImages(
   });
 
   // Build the prompt: enrich with Discogs data (Scenario A) or add vibe pairing only (Scenario B)
+  const hasImages = capturedImages.length > 0;
   const prompt = discogsData
-    ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt)
+    ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt, hasImages)
     : addPairingsToPrompt(systemPrompt);
 
   console.log('[Gemini] Prompt scenario:', discogsData ? 'A (Discogs-enriched)' : 'B (visual-only)');

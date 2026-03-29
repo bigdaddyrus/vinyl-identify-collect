@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,16 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
+import { getColors } from 'react-native-image-colors';
 import ViewShot from 'react-native-view-shot';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GradientButton } from '@/components/GradientButton';
 import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
@@ -21,12 +24,26 @@ import { triggerButtonPress, triggerCollectionAdd } from '@/utils/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - spacing.xl * 2;
-const CARD_IMAGE_SIZE = CARD_WIDTH * 0.35;
+const CARD_IMAGE_SIZE = CARD_WIDTH * 0.38;
+
+/** Lighten a hex color towards white by a fraction (0 = unchanged, 1 = white). */
+function lightenHex(hex: string, amount: number): string {
+  const r = Math.round(parseInt(hex.slice(1, 3), 16) + (255 - parseInt(hex.slice(1, 3), 16)) * amount);
+  const g = Math.round(parseInt(hex.slice(3, 5), 16) + (255 - parseInt(hex.slice(3, 5), 16)) * amount);
+  const b = Math.round(parseInt(hex.slice(5, 7), 16) + (255 - parseInt(hex.slice(5, 7), 16)) * amount);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+/** Check whether a color string is a valid hex color. */
+function isHex(c: string | undefined): c is string {
+  return !!c && /^#[0-9a-fA-F]{6}$/.test(c);
+}
 
 export default function ShareScreen() {
   const params = useLocalSearchParams();
   const viewShotRef = useRef<ViewShot>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [bgColors, setBgColors] = useState<[string, string]>(['#FFFFFF', '#F0F0F0']);
 
   let item: AnalysisResult | null = null;
   const rawItemData = params.itemData;
@@ -37,6 +54,48 @@ export default function ShareScreen() {
       item = null;
     }
   }
+
+  // Build image array
+  const imageList: string[] = item?.images?.length
+    ? item.images
+    : item?.imageUri
+      ? [item.imageUri]
+      : [];
+
+  const frontImage = imageList[0] ?? null;
+  const backImage = imageList[1] ?? null;
+
+  // Extract dominant colors from the first image
+  useEffect(() => {
+    if (!frontImage) return;
+
+    getColors(frontImage, {
+      fallback: '#FFFFFF',
+      cache: true,
+      key: frontImage,
+    }).then((result) => {
+      let dominant: string | undefined;
+      let secondary: string | undefined;
+
+      if (result.platform === 'android') {
+        dominant = result.dominant;
+        secondary = result.muted;
+      } else if (result.platform === 'ios') {
+        dominant = result.background;
+        secondary = result.secondary;
+      } else {
+        dominant = result.dominant;
+        secondary = result.muted;
+      }
+
+      const d = isHex(dominant) ? dominant : '#FFFFFF';
+      const s = isHex(secondary) ? secondary : d;
+      // Use lightened versions so text remains readable
+      setBgColors([lightenHex(d, 0.55), lightenHex(s, 0.65)]);
+    }).catch(() => {
+      // keep defaults
+    });
+  }, [frontImage]);
 
   if (!item) {
     return (
@@ -60,13 +119,6 @@ export default function ShareScreen() {
     }
     return formatValue(item.estimatedValue);
   };
-
-  // Build image array
-  const imageList: string[] = item.images?.length
-    ? item.images
-    : item.imageUri
-      ? [item.imageUri]
-      : [];
 
   const handleClose = () => {
     triggerButtonPress();
@@ -96,18 +148,7 @@ export default function ShareScreen() {
     }
   };
 
-  // Condition display label mapping
-  const conditionLabels: Record<string, string> = {
-    Mint: 'Mint Condition',
-    AU: 'Almost Uncirculated',
-    VF: 'Very Fine',
-    F: 'Fine',
-    VG: 'Very Good',
-    G: 'Good',
-    Fair: 'Fair',
-    Poor: 'Poor',
-    Uncertain: 'Uncertain',
-  };
+  const hasImages = frontImage || backImage;
 
   return (
     <View style={styles.container}>
@@ -128,21 +169,33 @@ export default function ShareScreen() {
           options={{ format: 'png', quality: 1 }}
           style={styles.viewShot}
         >
-          <View style={styles.card}>
-            {/* Item images */}
-            <View style={styles.cardImageRow}>
-              {imageList.length > 0 ? (
-                imageList.slice(0, 2).map((uri, i) => (
-                  <View key={`share-img-${i}`} style={styles.cardImageWrapper}>
-                    <Image source={{ uri }} style={styles.cardImage} contentFit="cover" />
+          <LinearGradient
+            colors={bgColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
+          >
+            {/* Item images — square frames */}
+            {hasImages && (
+              <View style={styles.cardImageRow}>
+                {frontImage && (
+                  <View style={styles.cardImageColumn}>
+                    <View style={styles.cardImageWrapper}>
+                      <Image source={{ uri: frontImage }} style={styles.cardImage} contentFit="cover" />
+                    </View>
+                    <Text style={styles.cardImageLabel}>Front</Text>
                   </View>
-                ))
-              ) : (
-                <View style={styles.cardImagePlaceholder}>
-                  <Ionicons name="image-outline" size={48} color="#CCC" />
-                </View>
-              )}
-            </View>
+                )}
+                {backImage && (
+                  <View style={styles.cardImageColumn}>
+                    <View style={styles.cardImageWrapper}>
+                      <Image source={{ uri: backImage }} style={styles.cardImage} contentFit="cover" />
+                    </View>
+                    <Text style={styles.cardImageLabel}>Back</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Price */}
             <Text style={styles.cardPrice}>{priceDisplay()}</Text>
@@ -152,23 +205,16 @@ export default function ShareScreen() {
               {item.name} {item.year ? `\u00B7 ${item.year}` : ''}
             </Text>
 
-            {/* Grade / Condition */}
-            {item.condition && (
-              <View style={styles.cardGradeRow}>
-                <View>
-                  <Text style={styles.cardGrade}>{item.condition}</Text>
-                  <Text style={styles.cardGradeLabel}>
-                    ({conditionLabels[item.condition] ?? item.condition})
-                  </Text>
-                </View>
-              </View>
+            {/* Genre tag */}
+            {item.genre && (
+              <Text style={styles.cardGenre}>{item.genre}</Text>
             )}
 
             {/* Branding */}
             <View style={styles.cardBranding}>
               <Text style={styles.cardBrandingText}>{appConfig.appName}</Text>
             </View>
-          </View>
+          </LinearGradient>
         </ViewShot>
       </View>
 
@@ -235,7 +281,6 @@ const styles = StyleSheet.create({
   },
   card: {
     width: CARD_WIDTH,
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingBottom: spacing.lg,
     overflow: 'hidden',
@@ -243,30 +288,44 @@ const styles = StyleSheet.create({
   cardImageRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
   },
+  cardImageColumn: {
+    alignItems: 'center',
+    gap: 6,
+  },
   cardImageWrapper: {
     width: CARD_IMAGE_SIZE,
     height: CARD_IMAGE_SIZE,
-    borderRadius: CARD_IMAGE_SIZE / 2,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#F0F0F0',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   cardImage: {
     width: '100%',
     height: '100%',
   },
-  cardImagePlaceholder: {
-    width: CARD_IMAGE_SIZE,
-    height: CARD_IMAGE_SIZE,
-    borderRadius: CARD_IMAGE_SIZE / 2,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardImageLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.45)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   cardPrice: {
     fontSize: 36,
@@ -278,42 +337,33 @@ const styles = StyleSheet.create({
   },
   cardName: {
     fontSize: 15,
-    fontWeight: '400',
-    color: '#666666',
+    fontWeight: '500',
+    color: '#444444',
     textAlign: 'center',
     marginTop: spacing.xs,
     paddingHorizontal: spacing.lg,
   },
-  cardGradeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  cardGrade: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  cardGradeLabel: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#999999',
-    marginTop: 2,
+  cardGenre: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.4)',
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   cardBranding: {
     alignItems: 'center',
     marginTop: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: 'rgba(0,0,0,0.12)',
     marginHorizontal: spacing.lg,
   },
   cardBrandingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#AAAAAA',
+    color: 'rgba(0,0,0,0.35)',
     letterSpacing: 0.5,
   },
 

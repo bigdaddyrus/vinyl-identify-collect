@@ -298,7 +298,7 @@ export const appConfig: AppConfig = {
     },
     gradeOptions: ['Mint (M)', 'Near Mint (NM)', 'Very Good Plus (VG+)', 'Very Good (VG)', 'Good Plus (G+)', 'Good (G)', 'Fair (F)', 'Poor (P)'],
     filterOptions: ['Value', 'Date', 'Name', 'Label'],
-    sortOptions: ['Highest Value', 'Lowest Value', 'Newest', 'Oldest', 'A-Z'],
+    sortOptions: ['Highest Value', 'Lowest Value', 'Newest', 'Oldest', 'Recently Collected', 'Earliest Collected', 'A-Z'],
     spotlightLabels: {
       title: 'Your Best Records',
       mostValuable: 'Most Valuable',

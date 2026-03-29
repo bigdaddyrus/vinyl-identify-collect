@@ -893,7 +893,8 @@ export default function ResultScreen() {
       const sid = source.replace('setdetail:', '');
       router.navigate({ pathname: '/(tabs)/(scanner)/setdetail', params: { setId: sid } });
     } else {
-      router.back();
+      // From scan flow (loading used router.replace), go home instead of back to camera
+      router.navigate('/(tabs)/(home)');
     }
   }, [params.source]);
 
@@ -983,50 +984,48 @@ export default function ResultScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero Image Carousel ── */}
-        <View style={styles.heroSection}>
-          <LinearGradient
-            colors={[colors.accentSurface, 'transparent']}
-            style={styles.heroGradient}
-            pointerEvents="none"
-          />
+        {/* ── Hero Image Carousel (hidden when no images) ── */}
+        {imageList.length > 0 && (
+          <>
+            <View style={styles.heroSection}>
+              <LinearGradient
+                colors={[colors.accentSurface, 'transparent']}
+                style={styles.heroGradient}
+                pointerEvents="none"
+              />
 
-          {imageList.length > 0 ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={onImageScroll}
-              style={styles.carousel}
-            >
-              {imageList.map((uri, i) => (
-                <TouchableOpacity
-                  key={`img-${i}`}
-                  style={styles.carouselItem}
-                  onPress={() => setFullscreenUri(uri)}
-                  activeOpacity={0.9}
-                >
-                  <Image source={{ uri }} style={styles.carouselImage} contentFit="contain" />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={styles.heroPlaceholder}>
-              <Ionicons name="image-outline" size={64} color={colors.overlayLight} />
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onImageScroll}
+                style={styles.carousel}
+              >
+                {imageList.map((uri, i) => (
+                  <TouchableOpacity
+                    key={`img-${i}`}
+                    style={styles.carouselItem}
+                    onPress={() => setFullscreenUri(uri)}
+                    activeOpacity={0.9}
+                  >
+                    <Image source={{ uri }} style={styles.carouselImage} contentFit="contain" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Confidence badge */}
+              {item.confidence > 0 && (
+                <View style={styles.confidenceBadge}>
+                  <Ionicons name="analytics" size={12} color={colors.white} />
+                  <Text style={styles.confidenceText}>Confidence {item.confidence}%</Text>
+                </View>
+              )}
             </View>
-          )}
 
-          {/* Confidence badge */}
-          {item.confidence > 0 && (
-            <View style={styles.confidenceBadge}>
-              <Ionicons name="analytics" size={12} color={colors.white} />
-              <Text style={styles.confidenceText}>Confidence {item.confidence}%</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Pagination dots */}
-        <PaginationDots count={imageList.length} activeIndex={activeImageIndex} />
+            {/* Pagination dots */}
+            <PaginationDots count={imageList.length} activeIndex={activeImageIndex} />
+          </>
+        )}
 
         {/* ── Core Information (Read-Only) ── */}
         <View style={styles.infoSection}>
@@ -1069,15 +1068,9 @@ export default function ResultScreen() {
             ))}
           </View>
 
-          {/* Key-value rows: Grade, Weight, Date */}
-          {(item.condition || item.weight || collectionDateStr) && (
+          {/* Key-value rows: Weight, Date */}
+          {(item.weight || collectionDateStr) && (
             <View style={styles.detailRows}>
-              {item.condition && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailRowLabel}>Grade</Text>
-                  <Text style={styles.detailRowValue}>{item.condition}</Text>
-                </View>
-              )}
               {item.weight && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailRowLabel}>Weight</Text>

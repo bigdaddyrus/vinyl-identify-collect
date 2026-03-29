@@ -74,6 +74,14 @@ export default function ScannerHomeScreen() {
     setBarcode(result.data);
   }, [barcodeScanned, cart.currentStep, setBarcode]);
 
+  const handleIdentifyNow = () => {
+    triggerButtonPress();
+    router.replace({
+      pathname: '/(tabs)/(scanner)/loading',
+      params: { barcode: cart.barcode },
+    });
+  };
+
   const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
     router.push({
       pathname: '/(tabs)/(scanner)/crop',
@@ -358,11 +366,21 @@ export default function ScannerHomeScreen() {
           </View>
         )}
 
-        {/* Barcode detected indicator */}
-        {cart.barcode && (
-          <View style={styles.barcodeDetected}>
-            <Ionicons name="barcode" size={14} color={colors.success} />
-            <Text style={styles.barcodeDetectedText}>Barcode: {cart.barcode}</Text>
+        {/* Barcode detected — show number + Identify Now shortcut */}
+        {cart.barcode && !isBarcode && (
+          <View style={styles.barcodeBar}>
+            <View style={styles.barcodeInfo}>
+              <Ionicons name="barcode" size={14} color={colors.success} />
+              <Text style={styles.barcodeBarText} numberOfLines={1}>{cart.barcode}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.identifyNowButton}
+              onPress={handleIdentifyNow}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="sparkles" size={14} color={colors.accentPrimary} />
+              <Text style={styles.identifyNowText}>Identify Now</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -603,7 +621,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.85)',
   },
   controls: {
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   stepLabel: {
     fontSize: 13,
@@ -619,21 +637,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   sideButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   captureColumn: {
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   captureButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 3,
     borderColor: colors.accentPrimary,
@@ -641,15 +659,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   captureButtonInner: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.accentPrimary,
   },
   zoomButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -663,7 +681,7 @@ const styles = StyleSheet.create({
   // ── Ready state controls ──
   readyControls: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
   secondaryButton: {
@@ -721,18 +739,40 @@ const styles = StyleSheet.create({
     color: colors.accentPrimary,
   },
 
-  // ── Barcode Step ──
-  barcodeDetected: {
+  // ── Barcode Bar (detected state) ──
+  barcodeBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: spacing.xs,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
   },
-  barcodeDetectedText: {
+  barcodeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  barcodeBarText: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.success,
+  },
+  identifyNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.round,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+  },
+  identifyNowText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accentPrimary,
   },
   barcodeScanningIndicator: {
     flexDirection: 'row',
