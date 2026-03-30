@@ -25,14 +25,20 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { scanFromURLAsync } from 'expo-camera';
 import { GradientButton } from '@/components/GradientButton';
 import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
-import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
+import { AnalysisResult, ExtendedDetailSection, CapturedImage, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
 import { getDisplayName } from '@/data/countryCoordinates';
+import { searchByBarcode, searchByQuery } from '@/services/discogs';
+import type { DiscogsResult } from '@/services/discogs';
+import { analyzeImages } from '@/services/geminiVision';
+import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.38;
@@ -762,6 +768,7 @@ export default function ResultScreen() {
   const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
   const [showSetPicker, setShowSetPicker] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -941,6 +948,9 @@ export default function ResultScreen() {
     }
 
     options.push({ text: 'Edit', onPress: handleEdit });
+    options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
+    options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
+    options.push({ text: isReanalyzing ? 'Re-analyzing...' : 'Re-analyze', onPress: handleReanalyze });
 
     if (isInCollection && !pendingSave) {
       options.push({
@@ -968,6 +978,178 @@ export default function ResultScreen() {
 
     options.push({ text: 'Cancel', style: 'cancel' });
     Alert.alert(item.name, undefined, options);
+  };
+
+  // ── Add / Scan Barcode ──
+  const handleAddBarcode = () => {
+    triggerButtonPress();
+    Alert.alert('Add Barcode', undefined, [
+      {
+        text: 'Enter Manually',
+        onPress: () => {
+          Alert.prompt(
+            'Enter Barcode',
+            'Type the barcode number (EAN/UPC)',
+            async (text) => {
+              const trimmed = text?.trim();
+              if (!trimmed || trimmed.length < 8) {
+                if (trimmed) Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+                return;
+              }
+              updateCollectionItem(item.id, { barcode: trimmed });
+              // Try Discogs lookup
+              const discogs = await searchByBarcode(trimmed);
+              if (discogs) {
+                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
+                Alert.alert('Barcode Added', 'Discogs data enriched successfully.');
+              } else {
+                Alert.alert('Barcode Saved', 'No Discogs match found for this barcode.');
+              }
+            },
+            'plain-text',
+            item.barcode ?? '',
+            'number-pad',
+          );
+        },
+      },
+      {
+        text: 'Scan from Photo',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert('Permission Required', 'Please grant photo library access.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: false,
+            quality: 0.8,
+          });
+          if (result.canceled) return;
+          try {
+            const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
+            if (barcodes.length > 0) {
+              const code = barcodes[0].data;
+              updateCollectionItem(item.id, { barcode: code });
+              const discogs = await searchByBarcode(code);
+              if (discogs) {
+                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
+                Alert.alert('Barcode Found', `${code} — Discogs data enriched.`);
+              } else {
+                Alert.alert('Barcode Found', `${code} saved. No Discogs match found.`);
+              }
+            } else {
+              Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image.');
+            }
+          } catch {
+            Alert.alert('Scan Failed', 'Unable to scan barcode from image.');
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  // ── Add / Replace Photos ──
+  const handleManagePhotos = async () => {
+    triggerButtonPress();
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission Required', 'Please grant photo library access.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: 3,
+      quality: 0.8,
+    });
+    if (result.canceled || result.assets.length === 0) return;
+
+    const newUris = result.assets.map((a) => a.uri);
+    const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+
+    if (existingImages.length > 0) {
+      Alert.alert(
+        'Photos',
+        `You have ${existingImages.length} existing photo${existingImages.length > 1 ? 's' : ''}. What would you like to do?`,
+        [
+          {
+            text: 'Replace All',
+            onPress: () => {
+              updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
+            },
+          },
+          {
+            text: 'Add to Existing',
+            onPress: () => {
+              const merged = [...existingImages, ...newUris];
+              updateCollectionItem(item.id, { images: merged, imageUri: merged[0] });
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+    } else {
+      updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
+    }
+  };
+
+  // ── Re-analyze with LLM ──
+  const handleReanalyze = async () => {
+    triggerButtonPress();
+    if (isReanalyzing) return;
+
+    setIsReanalyzing(true);
+    try {
+      // Gather existing images as CapturedImage[]
+      const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+      const capturedImages: CapturedImage[] = existingImages.map((uri, i) => ({
+        type: (i === 0 ? 'front' : i === 1 ? 'back' : 'label') as CapturedImage['type'],
+        uri,
+      }));
+
+      // Fetch Discogs data if we have a barcode
+      let discogsData: DiscogsResult | null = null;
+      if (item.barcode) {
+        discogsData = await searchByBarcode(item.barcode);
+      }
+      if (!discogsData && item.name) {
+        discogsData = await searchByQuery(item.name.replace(/\s*[—–-]\s*/g, ' ').replace(/\([^)]*\)/g, '').trim());
+      }
+
+      const result = await analyzeImages(capturedImages, discogsData, item.barcode);
+
+      // Preserve fields that shouldn't be overwritten
+      const updates: Partial<AnalysisResult> = {
+        name: result.name,
+        origin: result.origin,
+        year: result.year,
+        estimatedValue: result.estimatedValue,
+        estimatedValueLow: result.estimatedValueLow,
+        estimatedValueHigh: result.estimatedValueHigh,
+        confidence: result.confidence,
+        description: result.description,
+        label: result.label,
+        genre: result.genre,
+        rarity: result.rarity,
+        condition: result.condition,
+        vibePairing: result.vibePairing,
+        foodPairing: result.foodPairing,
+        drinkPairing: result.drinkPairing,
+        albumArtQuery: result.albumArtQuery,
+        extendedDetails: result.extendedDetails,
+        countryCode: result.countryCode,
+      };
+
+      updateCollectionItem(item.id, updates);
+      Alert.alert('Re-analysis Complete', 'Item data has been refreshed.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      Alert.alert('Re-analysis Failed', msg);
+    } finally {
+      setIsReanalyzing(false);
+    }
   };
 
   const currentSetIds = storeItem?.setIds ?? paramResult.setIds ?? [];

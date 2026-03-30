@@ -1,6 +1,7 @@
 import { searchByBarcode, searchByQuery } from './discogs';
 import type { DiscogsResult } from './discogs';
 import { AnalysisResult } from '@/types';
+import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
 const RATE_LIMIT_MS = 1200; // ~50 requests/min to stay within Discogs limits
 
@@ -10,36 +11,11 @@ function sleep(ms: number): Promise<void> {
 
 /** Extract a search query from an item name (e.g. "Artist — Album Title (edition)" → "Artist Album Title") */
 function buildQuery(item: AnalysisResult): string {
-  // Remove parenthetical edition info, en-dash separator, and extra whitespace
   return item.name
-    .replace(/\s*[—–-]\s*/g, ' ')       // replace dashes with space
-    .replace(/\([^)]*\)/g, '')           // remove parentheticals
+    .replace(/\s*[—–-]\s*/g, ' ')
+    .replace(/\([^)]*\)/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/** Merge Discogs data into an AnalysisResult, returning the partial update */
-function buildUpdates(discogs: DiscogsResult): Partial<AnalysisResult> {
-  const updates: Partial<AnalysisResult> = {};
-
-  if (discogs.thumbnail) updates.discogsThumbnail = discogs.thumbnail;
-  if (discogs.primaryImage) updates.discogsImage = discogs.primaryImage;
-  if (discogs.discogsImages.length > 0) updates.discogsImages = discogs.discogsImages;
-  if (discogs.styles.length > 0) updates.styles = discogs.styles;
-  if (discogs.weight) updates.weight = discogs.weight;
-  if (discogs.tracklist.length > 0) updates.discogsTracklist = discogs.tracklist;
-  if (discogs.companies.length > 0) updates.companies = discogs.companies;
-  if (discogs.extraArtists.length > 0) updates.extraArtists = discogs.extraArtists;
-  if (discogs.discogsUrl) updates.discogsUrl = discogs.discogsUrl;
-  if (discogs.discogsId) updates.discogsId = discogs.discogsId;
-  if (discogs.lowestPrice != null) updates.lowestPrice = discogs.lowestPrice;
-  if (discogs.numForSale != null) updates.numForSale = discogs.numForSale;
-  if (discogs.community) {
-    updates.communityHave = discogs.community.have;
-    updates.communityWant = discogs.community.want;
-  }
-
-  return updates;
 }
 
 export interface BackpopulateProgress {
@@ -60,7 +36,6 @@ export async function backpopulateDiscogs(
   updateItem: (id: string, updates: Partial<AnalysisResult>) => void,
   onProgress?: (progress: BackpopulateProgress) => void,
 ): Promise<{ enriched: number; failed: number; skipped: number }> {
-  // Filter items that don't have Discogs data yet
   const needsEnrichment = collection.filter((item) => !item.discogsId);
 
   const total = needsEnrichment.length;
@@ -81,12 +56,10 @@ export async function backpopulateDiscogs(
     try {
       let discogs: DiscogsResult | null = null;
 
-      // Try barcode first if available
       if (item.barcode) {
         discogs = await searchByBarcode(item.barcode);
       }
 
-      // Fall back to name-based search
       if (!discogs) {
         const query = buildQuery(item);
         if (query.length >= 3) {
@@ -95,8 +68,7 @@ export async function backpopulateDiscogs(
       }
 
       if (discogs) {
-        const updates = buildUpdates(discogs);
-        updateItem(item.id, updates);
+        updateItem(item.id, buildDiscogsUpdates(discogs));
         enriched++;
       } else {
         failed++;
@@ -105,7 +77,6 @@ export async function backpopulateDiscogs(
       failed++;
     }
 
-    // Rate limit between requests
     if (i < needsEnrichment.length - 1) {
       await sleep(RATE_LIMIT_MS);
     }

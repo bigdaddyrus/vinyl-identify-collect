@@ -13,12 +13,17 @@ import { GoldenGlow } from '@/components/GoldenGlow';
 import { BulkMoveModal } from '@/components/BulkMoveModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
-import { AnalysisResult, CollectionSet } from '@/types';
+import * as ImagePicker from 'expo-image-picker';
+import { scanFromURLAsync } from 'expo-camera';
+import { AnalysisResult, CapturedImage, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
 import { backpopulateDiscogs, BackpopulateProgress } from '@/services/backpopulateDiscogs';
+import { searchByBarcode, searchByQuery } from '@/services/discogs';
+import { analyzeImages } from '@/services/geminiVision';
+import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
 const DEFAULT_TAB_BAR_STYLE = {
   backgroundColor: '#0A0A0A',
@@ -65,6 +70,7 @@ export default function PortfolioScreen() {
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [isBackpopulating, setIsBackpopulating] = useState(false);
   const [backpopProgress, setBackpopProgress] = useState<BackpopulateProgress | null>(null);
+  const [reanalyzingId, setReanalyzingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     navigation.getParent()?.setOptions({
@@ -552,6 +558,136 @@ export default function PortfolioScreen() {
     }
   };
 
+  const handleItemAddBarcode = (item: AnalysisResult) => {
+    Alert.alert('Add Barcode', undefined, [
+      {
+        text: 'Enter Manually',
+        onPress: () => {
+          Alert.prompt(
+            'Enter Barcode',
+            'Type the barcode number (EAN/UPC)',
+            async (text) => {
+              const trimmed = text?.trim();
+              if (!trimmed || trimmed.length < 8) {
+                if (trimmed) Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+                return;
+              }
+              updateCollectionItem(item.id, { barcode: trimmed });
+              const discogs = await searchByBarcode(trimmed);
+              if (discogs) {
+                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
+                Alert.alert('Barcode Added', 'Discogs data enriched successfully.');
+              } else {
+                Alert.alert('Barcode Saved', 'No Discogs match found.');
+              }
+            },
+            'plain-text',
+            item.barcode ?? '',
+            'number-pad',
+          );
+        },
+      },
+      {
+        text: 'Scan from Photo',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert('Permission Required', 'Please grant photo library access.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.8 });
+          if (result.canceled) return;
+          try {
+            const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
+            if (barcodes.length > 0) {
+              const code = barcodes[0].data;
+              updateCollectionItem(item.id, { barcode: code });
+              const discogs = await searchByBarcode(code);
+              if (discogs) {
+                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
+                Alert.alert('Barcode Found', `${code} — Discogs data enriched.`);
+              } else {
+                Alert.alert('Barcode Found', `${code} saved. No Discogs match found.`);
+              }
+            } else {
+              Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image.');
+            }
+          } catch {
+            Alert.alert('Scan Failed', 'Unable to scan barcode from image.');
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleItemManagePhotos = async (item: AnalysisResult) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission Required', 'Please grant photo library access.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 3, quality: 0.8 });
+    if (result.canceled || result.assets.length === 0) return;
+
+    const newUris = result.assets.map((a) => a.uri);
+    const existing = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+
+    if (existing.length > 0) {
+      Alert.alert('Photos', `You have ${existing.length} existing photo${existing.length > 1 ? 's' : ''}.`, [
+        { text: 'Replace All', onPress: () => updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] }) },
+        { text: 'Add to Existing', onPress: () => { const merged = [...existing, ...newUris]; updateCollectionItem(item.id, { images: merged, imageUri: merged[0] }); } },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    } else {
+      updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
+    }
+  };
+
+  const handleItemReanalyze = async (item: AnalysisResult) => {
+    if (reanalyzingId) return;
+    setReanalyzingId(item.id);
+    try {
+      const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+      const capturedImages: CapturedImage[] = existingImages.map((uri, i) => ({
+        type: (i === 0 ? 'front' : i === 1 ? 'back' : 'label') as CapturedImage['type'],
+        uri,
+      }));
+
+      let discogsData = item.barcode ? await searchByBarcode(item.barcode) : null;
+      if (!discogsData && item.name) {
+        discogsData = await searchByQuery(item.name.replace(/\s*[—–-]\s*/g, ' ').replace(/\([^)]*\)/g, '').trim());
+      }
+
+      const result = await analyzeImages(capturedImages, discogsData, item.barcode);
+      updateCollectionItem(item.id, {
+        name: result.name,
+        origin: result.origin,
+        year: result.year,
+        estimatedValue: result.estimatedValue,
+        estimatedValueLow: result.estimatedValueLow,
+        estimatedValueHigh: result.estimatedValueHigh,
+        confidence: result.confidence,
+        description: result.description,
+        label: result.label,
+        genre: result.genre,
+        rarity: result.rarity,
+        condition: result.condition,
+        vibePairing: result.vibePairing,
+        foodPairing: result.foodPairing,
+        drinkPairing: result.drinkPairing,
+        albumArtQuery: result.albumArtQuery,
+        extendedDetails: result.extendedDetails,
+        countryCode: result.countryCode,
+      });
+      Alert.alert('Re-analysis Complete', 'Item data has been refreshed.');
+    } catch (err) {
+      Alert.alert('Re-analysis Failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setReanalyzingId(null);
+    }
+  };
+
   const handleKebabPress = (item: AnalysisResult) => {
     triggerButtonPress();
     Alert.alert(
@@ -566,6 +702,18 @@ export default function PortfolioScreen() {
               params: { itemData: JSON.stringify(item) },
             });
           },
+        },
+        {
+          text: item.barcode ? 'Update Barcode' : 'Add Barcode',
+          onPress: () => handleItemAddBarcode(item),
+        },
+        {
+          text: 'Add / Replace Photos',
+          onPress: () => handleItemManagePhotos(item),
+        },
+        {
+          text: reanalyzingId === item.id ? 'Re-analyzing...' : 'Re-analyze',
+          onPress: () => handleItemReanalyze(item),
         },
         {
           text: 'Delete',
