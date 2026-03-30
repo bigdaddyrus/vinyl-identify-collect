@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
-import { getColors } from 'react-native-image-colors';
 import ViewShot from 'react-native-view-shot';
-import { LinearGradient } from 'expo-linear-gradient';
 import { GradientButton } from '@/components/GradientButton';
 import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
@@ -26,24 +24,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - spacing.xl * 2;
 const CARD_IMAGE_SIZE = CARD_WIDTH * 0.38;
 
-/** Lighten a hex color towards white by a fraction (0 = unchanged, 1 = white). */
-function lightenHex(hex: string, amount: number): string {
-  const r = Math.round(parseInt(hex.slice(1, 3), 16) + (255 - parseInt(hex.slice(1, 3), 16)) * amount);
-  const g = Math.round(parseInt(hex.slice(3, 5), 16) + (255 - parseInt(hex.slice(3, 5), 16)) * amount);
-  const b = Math.round(parseInt(hex.slice(5, 7), 16) + (255 - parseInt(hex.slice(5, 7), 16)) * amount);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
-/** Check whether a color string is a valid hex color. */
-function isHex(c: string | undefined): c is string {
-  return !!c && /^#[0-9a-fA-F]{6}$/.test(c);
-}
-
 export default function ShareScreen() {
   const params = useLocalSearchParams();
   const viewShotRef = useRef<ViewShot>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [bgColors, setBgColors] = useState<[string, string]>(['#FFFFFF', '#F0F0F0']);
 
   let item: AnalysisResult | null = null;
   const rawItemData = params.itemData;
@@ -54,48 +38,6 @@ export default function ShareScreen() {
       item = null;
     }
   }
-
-  // Build image array
-  const imageList: string[] = item?.images?.length
-    ? item.images
-    : item?.imageUri
-      ? [item.imageUri]
-      : [];
-
-  const frontImage = imageList[0] ?? null;
-  const backImage = imageList[1] ?? null;
-
-  // Extract dominant colors from the first image
-  useEffect(() => {
-    if (!frontImage) return;
-
-    getColors(frontImage, {
-      fallback: '#FFFFFF',
-      cache: true,
-      key: frontImage,
-    }).then((result) => {
-      let dominant: string | undefined;
-      let secondary: string | undefined;
-
-      if (result.platform === 'android') {
-        dominant = result.dominant;
-        secondary = result.muted;
-      } else if (result.platform === 'ios') {
-        dominant = result.background;
-        secondary = result.secondary;
-      } else {
-        dominant = result.dominant;
-        secondary = result.muted;
-      }
-
-      const d = isHex(dominant) ? dominant : '#FFFFFF';
-      const s = isHex(secondary) ? secondary : d;
-      // Use lightened versions so text remains readable
-      setBgColors([lightenHex(d, 0.55), lightenHex(s, 0.65)]);
-    }).catch(() => {
-      // keep defaults
-    });
-  }, [frontImage]);
 
   if (!item) {
     return (
@@ -119,6 +61,17 @@ export default function ShareScreen() {
     }
     return formatValue(item.estimatedValue);
   };
+
+  // Build image array
+  const imageList: string[] = item.images?.length
+    ? item.images
+    : item.imageUri
+      ? [item.imageUri]
+      : [];
+
+  const frontImage = imageList[0] ?? null;
+  const backImage = imageList[1] ?? null;
+  const hasImages = frontImage || backImage;
 
   const handleClose = () => {
     triggerButtonPress();
@@ -148,8 +101,6 @@ export default function ShareScreen() {
     }
   };
 
-  const hasImages = frontImage || backImage;
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -169,12 +120,7 @@ export default function ShareScreen() {
           options={{ format: 'png', quality: 1 }}
           style={styles.viewShot}
         >
-          <LinearGradient
-            colors={bgColors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.card}
-          >
+          <View style={styles.card}>
             {/* Item images — square frames */}
             {hasImages && (
               <View style={styles.cardImageRow}>
@@ -214,7 +160,7 @@ export default function ShareScreen() {
             <View style={styles.cardBranding}>
               <Text style={styles.cardBrandingText}>{appConfig.appName}</Text>
             </View>
-          </LinearGradient>
+          </View>
         </ViewShot>
       </View>
 
@@ -281,6 +227,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: CARD_WIDTH,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingBottom: spacing.lg,
     overflow: 'hidden',
@@ -303,7 +250,7 @@ const styles = StyleSheet.create({
     height: CARD_IMAGE_SIZE,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: '#F0F0F0',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -323,7 +270,7 @@ const styles = StyleSheet.create({
   cardImageLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.45)',
+    color: '#999999',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -357,13 +304,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,0.12)',
+    borderTopColor: '#E0E0E0',
     marginHorizontal: spacing.lg,
   },
   cardBrandingText: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.35)',
+    color: '#AAAAAA',
     letterSpacing: 0.5,
   },
 

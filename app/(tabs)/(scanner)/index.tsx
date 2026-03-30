@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
-import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import { CameraView, useCameraPermissions, scanFromURLAsync, type BarcodeScanningResult } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -80,6 +80,55 @@ export default function ScannerHomeScreen() {
       pathname: '/(tabs)/(scanner)/loading',
       params: { barcode: cart.barcode },
     });
+  };
+
+  const handleManualBarcode = () => {
+    triggerButtonPress();
+    Alert.prompt(
+      'Enter Barcode',
+      'Type the barcode number (EAN/UPC)',
+      (text) => {
+        const trimmed = text?.trim();
+        if (trimmed && trimmed.length >= 8) {
+          setBarcodeScanned(true);
+          setBarcode(trimmed);
+        } else if (trimmed) {
+          Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+        }
+      },
+      'plain-text',
+      '',
+      'number-pad'
+    );
+  };
+
+  const handleGalleryBarcode = async () => {
+    triggerButtonPress();
+    const galleryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!galleryPermission.granted) {
+      Alert.alert('Permission Required', 'Please grant photo library access to select images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    try {
+      const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
+      if (barcodes.length > 0) {
+        setBarcodeScanned(true);
+        setBarcode(barcodes[0].data);
+      } else {
+        Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image. Try a clearer photo or enter manually.');
+      }
+    } catch {
+      Alert.alert('Scan Failed', 'Unable to scan barcode from image.');
+    }
   };
 
   const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
@@ -385,20 +434,38 @@ export default function ScannerHomeScreen() {
         )}
 
         {isBarcode ? (
-          /* Barcode step: scanning overlay + skip button */
+          /* Barcode step: scanning indicator + manual entry / gallery / skip */
           <View style={styles.readyControls}>
             <View style={styles.barcodeScanningIndicator}>
               <Ionicons name="barcode-outline" size={24} color={colors.accentPrimary} />
               <Text style={styles.barcodeScanningText}>Scanning for barcode...</Text>
             </View>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => { triggerButtonPress(); skipBarcode(); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
-              <Text style={styles.secondaryButtonText}>Skip Barcode (Vintage Record)</Text>
-            </TouchableOpacity>
+            <View style={styles.barcodeActionsRow}>
+              <TouchableOpacity
+                style={styles.barcodeActionButton}
+                onPress={handleManualBarcode}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="keypad-outline" size={18} color={colors.accentPrimary} />
+                <Text style={styles.barcodeActionText}>Enter</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.barcodeActionButton}
+                onPress={handleGalleryBarcode}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="images-outline" size={18} color={colors.accentPrimary} />
+                <Text style={styles.barcodeActionText}>Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.barcodeActionButton}
+                onPress={() => { triggerButtonPress(); skipBarcode(); }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
+                <Text style={styles.barcodeActionText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : isReady ? (
           /* Ready state: optional label scan + Run Analysis */
@@ -785,5 +852,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: colors.accentPrimary,
+  },
+  barcodeActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  barcodeActionButton: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  barcodeActionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
 });
