@@ -18,6 +18,7 @@ import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
+import { backpopulateDiscogs, BackpopulateProgress } from '@/services/backpopulateDiscogs';
 
 const DEFAULT_TAB_BAR_STYLE = {
   backgroundColor: '#0A0A0A',
@@ -38,6 +39,7 @@ export default function PortfolioScreen() {
   const getRarestItem = useAppStore((state) => state.getRarestItem);
   const getOriginDistribution = useAppStore((state) => state.getOriginDistribution);
   const removeFromCollection = useAppStore((state) => state.removeFromCollection);
+  const updateCollectionItem = useAppStore((state) => state.updateCollectionItem);
   const clearAllData = useAppStore((state) => state.clearAllData);
   const sets = useAppStore((state) => state.sets);
   const createSet = useAppStore((state) => state.createSet);
@@ -61,6 +63,8 @@ export default function PortfolioScreen() {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkMove, setShowBulkMove] = useState(false);
+  const [isBackpopulating, setIsBackpopulating] = useState(false);
+  const [backpopProgress, setBackpopProgress] = useState<BackpopulateProgress | null>(null);
 
   useLayoutEffect(() => {
     navigation.getParent()?.setOptions({
@@ -93,6 +97,45 @@ export default function PortfolioScreen() {
           },
         },
       ]
+    );
+  };
+
+  const handleBackpopulateDiscogs = async () => {
+    setShowPageMenu(false);
+    const needsEnrichment = collection.filter((item) => !item.discogsId).length;
+    if (needsEnrichment === 0) {
+      Alert.alert('Up to Date', 'All records already have Discogs data.');
+      return;
+    }
+    Alert.alert(
+      'Enrich from Discogs',
+      `${needsEnrichment} record${needsEnrichment === 1 ? '' : 's'} missing Discogs data. This will search Discogs for each one. This may take a minute or two.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start',
+          onPress: async () => {
+            setIsBackpopulating(true);
+            try {
+              const result = await backpopulateDiscogs(
+                collection,
+                updateCollectionItem,
+                (progress) => setBackpopProgress(progress),
+              );
+              setBackpopProgress(null);
+              Alert.alert(
+                'Enrichment Complete',
+                `Enriched: ${result.enriched}\nNot found: ${result.failed}\nAlready had data: ${result.skipped}`,
+              );
+            } catch {
+              Alert.alert('Error', 'Discogs enrichment failed. Please try again.');
+            } finally {
+              setIsBackpopulating(false);
+              setBackpopProgress(null);
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -254,6 +297,21 @@ export default function PortfolioScreen() {
             });
           }}
         />
+      )}
+
+      {/* Backpopulate progress banner */}
+      {isBackpopulating && backpopProgress && (
+        <View style={styles.backpopBanner}>
+          <ActivityIndicator size="small" color={colors.accentPrimary} />
+          <View style={{ flex: 1, marginLeft: spacing.sm }}>
+            <Text style={styles.backpopBannerText}>
+              Enriching {backpopProgress.current}/{backpopProgress.total}...
+            </Text>
+            <Text style={styles.backpopBannerSubtext} numberOfLines={1}>
+              {backpopProgress.currentItem}
+            </Text>
+          </View>
+        </View>
       )}
 
       {/* Export Button */}
@@ -663,6 +721,15 @@ export default function PortfolioScreen() {
           <View style={styles.sortDropdown}>
             <TouchableOpacity
               style={styles.pageMenuItem}
+              onPress={handleBackpopulateDiscogs}
+              activeOpacity={0.7}
+              disabled={isBackpopulating}
+            >
+              <Ionicons name="disc-outline" size={20} color={colors.accentPrimary} />
+              <Text style={styles.pageMenuItemText}>Enrich from Discogs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.pageMenuItem}
               onPress={handleDeleteAllData}
               activeOpacity={0.7}
             >
@@ -1061,10 +1128,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: 14,
   },
+  pageMenuItemText: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
   pageMenuItemTextDestructive: {
     ...typography.body,
     color: colors.error,
     fontWeight: '600',
+  },
+  backpopBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  backpopBannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+  },
+  backpopBannerSubtext: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   // Selection mode
   selectionHeader: {

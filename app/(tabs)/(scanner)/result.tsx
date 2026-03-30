@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientButton } from '@/components/GradientButton';
@@ -897,6 +897,19 @@ export default function ResultScreen() {
       router.navigate('/(tabs)/(home)');
     }
   }, [params.source]);
+
+  // Intercept native swipe-back gesture so it respects our source-based routing
+  const navigation = useNavigation();
+  const isNavigatingRef = useRef(false);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void }) => {
+      if (isNavigatingRef.current) return; // allow our own navigation through
+      e.preventDefault();
+      isNavigatingRef.current = true;
+      navigateBack();
+    });
+    return unsubscribe;
+  }, [navigation, navigateBack]);
 
   const handleBack = () => {
     triggerButtonPress();
