@@ -208,6 +208,10 @@ export default function PortfolioScreen() {
         return filtered.sort((a, b) => b.createdAt - a.createdAt);
       case 'Oldest':
         return filtered.sort((a, b) => a.createdAt - b.createdAt);
+      case 'Recently Collected':
+        return filtered.sort((a, b) => (b.collectionDate ?? b.createdAt) - (a.collectionDate ?? a.createdAt));
+      case 'Earliest Collected':
+        return filtered.sort((a, b) => (a.collectionDate ?? a.createdAt) - (b.collectionDate ?? b.createdAt));
       case 'A-Z':
         return filtered.sort((a, b) => a.name.localeCompare(b.name));
       default:

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
-import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import { CameraView, useCameraPermissions, scanFromURLAsync, type BarcodeScanningResult } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,6 +73,63 @@ export default function ScannerHomeScreen() {
     triggerButtonPress();
     setBarcode(result.data);
   }, [barcodeScanned, cart.currentStep, setBarcode]);
+
+  const handleIdentifyNow = () => {
+    triggerButtonPress();
+    router.replace({
+      pathname: '/(tabs)/(scanner)/loading',
+      params: { barcode: cart.barcode },
+    });
+  };
+
+  const handleManualBarcode = () => {
+    triggerButtonPress();
+    Alert.prompt(
+      'Enter Barcode',
+      'Type the barcode number (EAN/UPC)',
+      (text) => {
+        const trimmed = text?.trim();
+        if (trimmed && trimmed.length >= 8) {
+          setBarcodeScanned(true);
+          setBarcode(trimmed);
+        } else if (trimmed) {
+          Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+        }
+      },
+      'plain-text',
+      '',
+      'number-pad'
+    );
+  };
+
+  const handleGalleryBarcode = async () => {
+    triggerButtonPress();
+    const galleryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!galleryPermission.granted) {
+      Alert.alert('Permission Required', 'Please grant photo library access to select images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    try {
+      const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
+      if (barcodes.length > 0) {
+        setBarcodeScanned(true);
+        setBarcode(barcodes[0].data);
+      } else {
+        Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image. Try a clearer photo or enter manually.');
+      }
+    } catch {
+      Alert.alert('Scan Failed', 'Unable to scan barcode from image.');
+    }
+  };
 
   const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
     router.push({
@@ -358,29 +415,57 @@ export default function ScannerHomeScreen() {
           </View>
         )}
 
-        {/* Barcode detected indicator */}
-        {cart.barcode && (
-          <View style={styles.barcodeDetected}>
-            <Ionicons name="barcode" size={14} color={colors.success} />
-            <Text style={styles.barcodeDetectedText}>Barcode: {cart.barcode}</Text>
+        {/* Barcode detected — show number + Identify Now shortcut */}
+        {cart.barcode && !isBarcode && (
+          <View style={styles.barcodeBar}>
+            <View style={styles.barcodeInfo}>
+              <Ionicons name="barcode" size={14} color={colors.success} />
+              <Text style={styles.barcodeBarText} numberOfLines={1}>{cart.barcode}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.identifyNowButton}
+              onPress={handleIdentifyNow}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="sparkles" size={14} color={colors.accentPrimary} />
+              <Text style={styles.identifyNowText}>Identify Now</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {isBarcode ? (
-          /* Barcode step: scanning overlay + skip button */
+          /* Barcode step: scanning indicator + manual entry / gallery / skip */
           <View style={styles.readyControls}>
             <View style={styles.barcodeScanningIndicator}>
               <Ionicons name="barcode-outline" size={24} color={colors.accentPrimary} />
               <Text style={styles.barcodeScanningText}>Scanning for barcode...</Text>
             </View>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => { triggerButtonPress(); skipBarcode(); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
-              <Text style={styles.secondaryButtonText}>Skip Barcode (Vintage Record)</Text>
-            </TouchableOpacity>
+            <View style={styles.barcodeActionsRow}>
+              <TouchableOpacity
+                style={styles.barcodeActionButton}
+                onPress={handleManualBarcode}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="keypad-outline" size={18} color={colors.accentPrimary} />
+                <Text style={styles.barcodeActionText}>Enter</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.barcodeActionButton}
+                onPress={handleGalleryBarcode}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="images-outline" size={18} color={colors.accentPrimary} />
+                <Text style={styles.barcodeActionText}>Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.barcodeActionButton}
+                onPress={() => { triggerButtonPress(); skipBarcode(); }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
+                <Text style={styles.barcodeActionText}>Skip</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : isReady ? (
           /* Ready state: optional label scan + Run Analysis */
@@ -603,7 +688,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.85)',
   },
   controls: {
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   stepLabel: {
     fontSize: 13,
@@ -619,21 +704,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   sideButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   captureColumn: {
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   captureButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 3,
     borderColor: colors.accentPrimary,
@@ -641,15 +726,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   captureButtonInner: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.accentPrimary,
   },
   zoomButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -663,7 +748,7 @@ const styles = StyleSheet.create({
   // ── Ready state controls ──
   readyControls: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
   secondaryButton: {
@@ -721,18 +806,40 @@ const styles = StyleSheet.create({
     color: colors.accentPrimary,
   },
 
-  // ── Barcode Step ──
-  barcodeDetected: {
+  // ── Barcode Bar (detected state) ──
+  barcodeBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: spacing.xs,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
   },
-  barcodeDetectedText: {
+  barcodeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  barcodeBarText: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.success,
+  },
+  identifyNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.round,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+  },
+  identifyNowText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accentPrimary,
   },
   barcodeScanningIndicator: {
     flexDirection: 'row',
@@ -745,5 +852,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: colors.accentPrimary,
+  },
+  barcodeActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  barcodeActionButton: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  barcodeActionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
 });

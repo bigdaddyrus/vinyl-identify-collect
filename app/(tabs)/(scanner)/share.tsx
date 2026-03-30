@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -21,7 +22,7 @@ import { triggerButtonPress, triggerCollectionAdd } from '@/utils/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - spacing.xl * 2;
-const CARD_IMAGE_SIZE = CARD_WIDTH * 0.35;
+const CARD_IMAGE_SIZE = CARD_WIDTH * 0.38;
 
 export default function ShareScreen() {
   const params = useLocalSearchParams();
@@ -68,6 +69,10 @@ export default function ShareScreen() {
       ? [item.imageUri]
       : [];
 
+  const frontImage = imageList[0] ?? null;
+  const backImage = imageList[1] ?? null;
+  const hasImages = frontImage || backImage;
+
   const handleClose = () => {
     triggerButtonPress();
     router.back();
@@ -96,19 +101,6 @@ export default function ShareScreen() {
     }
   };
 
-  // Condition display label mapping
-  const conditionLabels: Record<string, string> = {
-    Mint: 'Mint Condition',
-    AU: 'Almost Uncirculated',
-    VF: 'Very Fine',
-    F: 'Fine',
-    VG: 'Very Good',
-    G: 'Good',
-    Fair: 'Fair',
-    Poor: 'Poor',
-    Uncertain: 'Uncertain',
-  };
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -129,20 +121,27 @@ export default function ShareScreen() {
           style={styles.viewShot}
         >
           <View style={styles.card}>
-            {/* Item images */}
-            <View style={styles.cardImageRow}>
-              {imageList.length > 0 ? (
-                imageList.slice(0, 2).map((uri, i) => (
-                  <View key={`share-img-${i}`} style={styles.cardImageWrapper}>
-                    <Image source={{ uri }} style={styles.cardImage} contentFit="cover" />
+            {/* Item images — square frames */}
+            {hasImages && (
+              <View style={styles.cardImageRow}>
+                {frontImage && (
+                  <View style={styles.cardImageColumn}>
+                    <View style={styles.cardImageWrapper}>
+                      <Image source={{ uri: frontImage }} style={styles.cardImage} contentFit="cover" />
+                    </View>
+                    <Text style={styles.cardImageLabel}>Front</Text>
                   </View>
-                ))
-              ) : (
-                <View style={styles.cardImagePlaceholder}>
-                  <Ionicons name="image-outline" size={48} color="#CCC" />
-                </View>
-              )}
-            </View>
+                )}
+                {backImage && (
+                  <View style={styles.cardImageColumn}>
+                    <View style={styles.cardImageWrapper}>
+                      <Image source={{ uri: backImage }} style={styles.cardImage} contentFit="cover" />
+                    </View>
+                    <Text style={styles.cardImageLabel}>Back</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Price */}
             <Text style={styles.cardPrice}>{priceDisplay()}</Text>
@@ -152,16 +151,9 @@ export default function ShareScreen() {
               {item.name} {item.year ? `\u00B7 ${item.year}` : ''}
             </Text>
 
-            {/* Grade / Condition */}
-            {item.condition && (
-              <View style={styles.cardGradeRow}>
-                <View>
-                  <Text style={styles.cardGrade}>{item.condition}</Text>
-                  <Text style={styles.cardGradeLabel}>
-                    ({conditionLabels[item.condition] ?? item.condition})
-                  </Text>
-                </View>
-              </View>
+            {/* Genre tag */}
+            {item.genre && (
+              <Text style={styles.cardGenre}>{item.genre}</Text>
             )}
 
             {/* Branding */}
@@ -243,30 +235,44 @@ const styles = StyleSheet.create({
   cardImageRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
   },
+  cardImageColumn: {
+    alignItems: 'center',
+    gap: 6,
+  },
   cardImageWrapper: {
     width: CARD_IMAGE_SIZE,
     height: CARD_IMAGE_SIZE,
-    borderRadius: CARD_IMAGE_SIZE / 2,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F0F0F0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   cardImage: {
     width: '100%',
     height: '100%',
   },
-  cardImagePlaceholder: {
-    width: CARD_IMAGE_SIZE,
-    height: CARD_IMAGE_SIZE,
-    borderRadius: CARD_IMAGE_SIZE / 2,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardImageLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#999999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   cardPrice: {
     fontSize: 36,
@@ -278,29 +284,20 @@ const styles = StyleSheet.create({
   },
   cardName: {
     fontSize: 15,
-    fontWeight: '400',
-    color: '#666666',
+    fontWeight: '500',
+    color: '#444444',
     textAlign: 'center',
     marginTop: spacing.xs,
     paddingHorizontal: spacing.lg,
   },
-  cardGradeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  cardGrade: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  cardGradeLabel: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#999999',
-    marginTop: 2,
+  cardGenre: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.4)',
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   cardBranding: {
     alignItems: 'center',

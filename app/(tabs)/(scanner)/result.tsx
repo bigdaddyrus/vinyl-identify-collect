@@ -9,6 +9,7 @@ import {
   Dimensions,
   Modal,
   StatusBar,
+  Linking,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -28,7 +29,7 @@ import { GradientButton } from '@/components/GradientButton';
 import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
-import { AnalysisResult, ExtendedDetailSection } from '@/types';
+import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
 import { getDisplayName } from '@/data/countryCoordinates';
@@ -223,6 +224,325 @@ const detailStyles = StyleSheet.create({
     fontWeight: '400',
     color: colors.white,
     lineHeight: 21,
+  },
+});
+
+// ── Accordion Section ──────────────────────────────────────
+function AccordionSection({
+  title,
+  icon,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  icon: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View style={accordionStyles.container}>
+      <TouchableOpacity
+        style={accordionStyles.header}
+        onPress={() => setOpen((prev) => !prev)}
+        activeOpacity={0.7}
+      >
+        <View style={accordionStyles.headerLeft}>
+          <View style={detailStyles.iconBox}>
+            <Ionicons name={icon as any} size={16} color={colors.accentPrimary} />
+          </View>
+          <Text style={detailStyles.title}>{title}</Text>
+        </View>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={18}
+          color={colors.textMuted}
+        />
+      </TouchableOpacity>
+      {open && <View style={accordionStyles.content}>{children}</View>}
+    </View>
+  );
+}
+
+const accordionStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  content: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
+});
+
+// ── Tracklist Accordion ─────────────────────────────────────
+function TracklistAccordion({ tracks }: { tracks: DiscogsTrackEntry[] }) {
+  return (
+    <AccordionSection title="Tracklist" icon="list">
+      {tracks.map((track, index) => (
+        <View
+          key={`${track.position}-${track.title}`}
+          style={[
+            tracklistStyles.row,
+            index < tracks.length - 1 && tracklistStyles.rowBorder,
+          ]}
+        >
+          <Text style={tracklistStyles.position}>{track.position}</Text>
+          <Text style={tracklistStyles.title} numberOfLines={2}>{track.title}</Text>
+          {track.duration ? (
+            <Text style={tracklistStyles.duration}>{track.duration}</Text>
+          ) : null}
+        </View>
+      ))}
+    </AccordionSection>
+  );
+}
+
+const tracklistStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: spacing.sm,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  position: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    width: 28,
+  },
+  title: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textPrimary,
+    lineHeight: 20,
+  },
+  duration: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: colors.textMuted,
+    marginLeft: spacing.sm,
+  },
+});
+
+// ── Companies Accordion ─────────────────────────────────────
+function CompaniesAccordion({ companies }: { companies: DiscogsCompanyEntry[] }) {
+  return (
+    <AccordionSection title="Companies" icon="business">
+      {companies.map((company, index) => (
+        <View
+          key={`${company.role}-${company.name}-${company.catno || index}`}
+          style={[
+            companiesStyles.row,
+            index < companies.length - 1 && companiesStyles.rowBorder,
+          ]}
+        >
+          <Text style={companiesStyles.role}>{company.role}</Text>
+          <Text style={companiesStyles.name}>{company.name}</Text>
+        </View>
+      ))}
+    </AccordionSection>
+  );
+}
+
+// ── Extra Artists Accordion ─────────────────────────────────
+function ExtraArtistsAccordion({ artists }: { artists: DiscogsExtraArtistEntry[] }) {
+  return (
+    <AccordionSection title="Credits" icon="people">
+      {artists.map((artist, index) => (
+        <View
+          key={`${artist.role}-${artist.name}`}
+          style={[
+            companiesStyles.row,
+            index < artists.length - 1 && companiesStyles.rowBorder,
+          ]}
+        >
+          <Text style={companiesStyles.role}>{artist.role}</Text>
+          <Text style={companiesStyles.name}>{artist.name}</Text>
+        </View>
+      ))}
+    </AccordionSection>
+  );
+}
+
+const companiesStyles = StyleSheet.create({
+  row: {
+    paddingVertical: 10,
+  },
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  role: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  name: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textPrimary,
+  },
+});
+
+// ── Marketplace Info ────────────────────────────────────────
+function MarketplaceInfo({
+  lowestPrice,
+  numForSale,
+  communityHave,
+  communityWant,
+  discogsUrl,
+}: {
+  lowestPrice?: number;
+  numForSale?: number;
+  communityHave?: number;
+  communityWant?: number;
+  discogsUrl?: string;
+}) {
+  const hasMarketplace = lowestPrice != null || numForSale != null;
+  const hasCommunity = communityHave != null || communityWant != null;
+  if (!hasMarketplace && !hasCommunity) return null;
+
+  return (
+    <View style={marketStyles.container}>
+      <View style={marketStyles.header}>
+        <View style={detailStyles.iconBox}>
+          <Ionicons name="storefront" size={16} color={colors.accentPrimary} />
+        </View>
+        <Text style={detailStyles.title}>Discogs Marketplace</Text>
+      </View>
+      <View style={marketStyles.grid}>
+        {lowestPrice != null && (
+          <View style={marketStyles.stat}>
+            <Text style={marketStyles.statValue}>${lowestPrice.toFixed(2)}</Text>
+            <Text style={marketStyles.statLabel}>Lowest Price</Text>
+          </View>
+        )}
+        {numForSale != null && (
+          <View style={marketStyles.stat}>
+            <Text style={marketStyles.statValue}>{numForSale.toLocaleString()}</Text>
+            <Text style={marketStyles.statLabel}>For Sale</Text>
+          </View>
+        )}
+        {communityHave != null && (
+          <View style={marketStyles.stat}>
+            <Text style={marketStyles.statValue}>{communityHave.toLocaleString()}</Text>
+            <Text style={marketStyles.statLabel}>Have</Text>
+          </View>
+        )}
+        {communityWant != null && (
+          <View style={marketStyles.stat}>
+            <Text style={marketStyles.statValue}>{communityWant.toLocaleString()}</Text>
+            <Text style={marketStyles.statLabel}>Want</Text>
+          </View>
+        )}
+      </View>
+      {discogsUrl && (
+        <TouchableOpacity
+          style={marketStyles.linkButton}
+          onPress={async () => {
+            try {
+              const supported = await Linking.canOpenURL(discogsUrl);
+              if (supported) {
+                await Linking.openURL(discogsUrl);
+              } else {
+                Alert.alert('Cannot Open Link', 'Unable to open this Discogs URL.');
+              }
+            } catch {
+              Alert.alert('Error', 'Failed to open the link.');
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="open-outline" size={16} color={colors.accentPrimary} />
+          <Text style={marketStyles.linkText}>View on Discogs</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const marketStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+  stat: {
+    width: '50%',
+    paddingBottom: spacing.md,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'PlayfairDisplay_700Bold',
+    color: colors.textPrimary,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.accentBorder,
+    backgroundColor: colors.accentSurface,
+  },
+  linkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accentPrimary,
   },
 });
 
@@ -471,12 +791,16 @@ export default function ResultScreen() {
 
   const { currencySymbol, upsellCta, showFeedback } = appConfig.result;
 
-  // Build image array from either images[] or legacy imageUri
-  const imageList: string[] = item.images?.length
+  // Build image array: user photos first, then Discogs images (deduplicated)
+  const userImages: string[] = item.images?.length
     ? item.images
     : item.imageUri
       ? [item.imageUri]
       : [];
+  const discogsFullImages: string[] = (item.discogsImages ?? [])
+    .map((img) => img.uri)
+    .filter((uri) => uri && !userImages.includes(uri));
+  const imageList: string[] = [...userImages, ...discogsFullImages];
 
   // ── Value formatting ──
   const formatValue = (value: number) => {
@@ -569,7 +893,8 @@ export default function ResultScreen() {
       const sid = source.replace('setdetail:', '');
       router.navigate({ pathname: '/(tabs)/(scanner)/setdetail', params: { setId: sid } });
     } else {
-      router.back();
+      // From scan flow (loading used router.replace), go home instead of back to camera
+      router.navigate('/(tabs)/(home)');
     }
   }, [params.source]);
 
@@ -659,50 +984,48 @@ export default function ResultScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero Image Carousel ── */}
-        <View style={styles.heroSection}>
-          <LinearGradient
-            colors={[colors.accentSurface, 'transparent']}
-            style={styles.heroGradient}
-            pointerEvents="none"
-          />
+        {/* ── Hero Image Carousel (hidden when no images) ── */}
+        {imageList.length > 0 && (
+          <>
+            <View style={styles.heroSection}>
+              <LinearGradient
+                colors={[colors.accentSurface, 'transparent']}
+                style={styles.heroGradient}
+                pointerEvents="none"
+              />
 
-          {imageList.length > 0 ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={onImageScroll}
-              style={styles.carousel}
-            >
-              {imageList.map((uri, i) => (
-                <TouchableOpacity
-                  key={`img-${i}`}
-                  style={styles.carouselItem}
-                  onPress={() => setFullscreenUri(uri)}
-                  activeOpacity={0.9}
-                >
-                  <Image source={{ uri }} style={styles.carouselImage} contentFit="contain" />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={styles.heroPlaceholder}>
-              <Ionicons name="image-outline" size={64} color={colors.overlayLight} />
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onImageScroll}
+                style={styles.carousel}
+              >
+                {imageList.map((uri, i) => (
+                  <TouchableOpacity
+                    key={`img-${i}`}
+                    style={styles.carouselItem}
+                    onPress={() => setFullscreenUri(uri)}
+                    activeOpacity={0.9}
+                  >
+                    <Image source={{ uri }} style={styles.carouselImage} contentFit="contain" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Confidence badge */}
+              {item.confidence > 0 && (
+                <View style={styles.confidenceBadge}>
+                  <Ionicons name="analytics" size={12} color={colors.white} />
+                  <Text style={styles.confidenceText}>Confidence {item.confidence}%</Text>
+                </View>
+              )}
             </View>
-          )}
 
-          {/* Confidence badge */}
-          {item.confidence > 0 && (
-            <View style={styles.confidenceBadge}>
-              <Ionicons name="analytics" size={12} color={colors.white} />
-              <Text style={styles.confidenceText}>Confidence {item.confidence}%</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Pagination dots */}
-        <PaginationDots count={imageList.length} activeIndex={activeImageIndex} />
+            {/* Pagination dots */}
+            <PaginationDots count={imageList.length} activeIndex={activeImageIndex} />
+          </>
+        )}
 
         {/* ── Core Information (Read-Only) ── */}
         <View style={styles.infoSection}>
@@ -737,15 +1060,21 @@ export default function ResultScreen() {
                 <Text style={styles.chipText}>{item.barcode}</Text>
               </View>
             )}
+            {item.styles?.map((style, i) => (
+              <View key={`style-${i}`} style={styles.chip}>
+                <Ionicons name="pricetag" size={12} color={colors.iconMuted} />
+                <Text style={styles.chipText}>{style}</Text>
+              </View>
+            ))}
           </View>
 
-          {/* Key-value rows: Grade, Date */}
-          {(item.condition || collectionDateStr) && (
+          {/* Key-value rows: Weight, Date */}
+          {(item.weight || collectionDateStr) && (
             <View style={styles.detailRows}>
-              {item.condition && (
+              {item.weight && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailRowLabel}>Grade</Text>
-                  <Text style={styles.detailRowValue}>{item.condition}</Text>
+                  <Text style={styles.detailRowLabel}>Weight</Text>
+                  <Text style={styles.detailRowValue}>{item.weight}</Text>
                 </View>
               )}
               {collectionDateStr && isInCollection && (
@@ -829,6 +1158,43 @@ export default function ResultScreen() {
         <View style={styles.descriptionSection}>
           <Text style={styles.descriptionText}>{item.description}</Text>
         </View>
+
+        {/* ── Tracklist (Discogs) ── */}
+        {item.discogsTracklist && item.discogsTracklist.length > 0 && (
+          <View style={styles.detailsSection}>
+            <TracklistAccordion tracks={item.discogsTracklist} />
+          </View>
+        )}
+
+        {/* ── Extra Artists / Credits (Discogs) ── */}
+        {item.extraArtists && item.extraArtists.length > 0 && (
+          <View style={styles.detailsSection}>
+            <ExtraArtistsAccordion artists={item.extraArtists} />
+          </View>
+        )}
+
+        {/* ── Companies (Discogs) ── */}
+        {item.companies && item.companies.length > 0 && (
+          <View style={styles.detailsSection}>
+            <CompaniesAccordion companies={item.companies} />
+          </View>
+        )}
+
+        {/* ── Marketplace (Discogs) ── */}
+        {(item.lowestPrice != null ||
+          item.numForSale != null ||
+          item.communityHave != null ||
+          item.communityWant != null) && (
+          <View style={styles.detailsSection}>
+            <MarketplaceInfo
+              lowestPrice={item.lowestPrice}
+              numForSale={item.numForSale}
+              communityHave={item.communityHave}
+              communityWant={item.communityWant}
+              discogsUrl={item.discogsUrl}
+            />
+          </View>
+        )}
 
         {/* ── Detail Sections (flat, always visible) ── */}
         {item.extendedDetails && item.extendedDetails.length > 0 && (
