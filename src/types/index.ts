@@ -322,6 +322,26 @@ export interface CollectionSet {
   updatedAt: number;
 }
 
+// Discogs tracklist entry stored on AnalysisResult
+export interface DiscogsTrackEntry {
+  position: string;
+  title: string;
+  duration: string;
+}
+
+// Discogs company/credit stored on AnalysisResult
+export interface DiscogsCompanyEntry {
+  name: string;
+  role: string;
+  catno: string;
+}
+
+// Discogs extra artist credit (e.g. "Mastered By", "Producer")
+export interface DiscogsExtraArtistEntry {
+  name: string;
+  role: string;
+}
+
 // Analysis result from AI (or mock)
 export interface AnalysisResult {
   id: string;
@@ -350,6 +370,21 @@ export interface AnalysisResult {
   notes?: string; // User-editable notes
   setIds?: string[]; // IDs of sets this item belongs to
   extendedDetails?: ExtendedDetailSection[];
+  // Discogs enrichment fields
+  discogsThumbnail?: string; // Small image from Discogs (150px)
+  discogsImage?: string; // Full-size primary image from Discogs
+  discogsImages?: { type: string; uri: string; uri150: string; width: number; height: number }[]; // All Discogs images
+  styles?: string[]; // Sub-genre styles (e.g. "Grunge", "Alternative Rock")
+  weight?: string; // Vinyl weight (e.g. "180g")
+  discogsTracklist?: DiscogsTrackEntry[]; // Full tracklist with positions/durations
+  companies?: DiscogsCompanyEntry[]; // Pressing plants, distributors, etc.
+  extraArtists?: DiscogsExtraArtistEntry[]; // Person credits (e.g. "Mastered By", "Producer")
+  discogsUrl?: string; // Direct link to Discogs release page
+  discogsId?: number; // Discogs release ID
+  lowestPrice?: number; // Lowest marketplace price on Discogs
+  numForSale?: number; // Number of copies for sale on Discogs
+  communityHave?: number; // Discogs community: users who have this
+  communityWant?: number; // Discogs community: users who want this
 }
 
 // Geographic origin distribution for map display

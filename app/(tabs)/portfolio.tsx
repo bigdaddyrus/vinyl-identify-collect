@@ -13,11 +13,16 @@ import { GoldenGlow } from '@/components/GoldenGlow';
 import { BulkMoveModal } from '@/components/BulkMoveModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
+import * as ImagePicker from 'expo-image-picker';
+import { scanFromURLAsync } from 'expo-camera';
 import { AnalysisResult, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
+import { backpopulateDiscogs, BackpopulateProgress } from '@/services/backpopulateDiscogs';
+import { searchByBarcode } from '@/services/discogs';
+import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
 const DEFAULT_TAB_BAR_STYLE = {
   backgroundColor: '#0A0A0A',
@@ -38,6 +43,7 @@ export default function PortfolioScreen() {
   const getRarestItem = useAppStore((state) => state.getRarestItem);
   const getOriginDistribution = useAppStore((state) => state.getOriginDistribution);
   const removeFromCollection = useAppStore((state) => state.removeFromCollection);
+  const updateCollectionItem = useAppStore((state) => state.updateCollectionItem);
   const clearAllData = useAppStore((state) => state.clearAllData);
   const sets = useAppStore((state) => state.sets);
   const createSet = useAppStore((state) => state.createSet);
@@ -52,7 +58,7 @@ export default function PortfolioScreen() {
     if (tab) setActiveTab(tab);
   }, [tab]);
 
-  const [sortBy, setSortBy] = useState('Highest Value');
+  const [sortBy, setSortBy] = useState('Recently Collected');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showPageMenu, setShowPageMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +67,8 @@ export default function PortfolioScreen() {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkMove, setShowBulkMove] = useState(false);
+  const [isBackpopulating, setIsBackpopulating] = useState(false);
+  const [backpopProgress, setBackpopProgress] = useState<BackpopulateProgress | null>(null);
 
   useLayoutEffect(() => {
     navigation.getParent()?.setOptions({
@@ -93,6 +101,45 @@ export default function PortfolioScreen() {
           },
         },
       ]
+    );
+  };
+
+  const handleBackpopulateDiscogs = async () => {
+    setShowPageMenu(false);
+    const needsEnrichment = collection.filter((item) => !item.discogsId).length;
+    if (needsEnrichment === 0) {
+      Alert.alert('Up to Date', 'All records already have Discogs data.');
+      return;
+    }
+    Alert.alert(
+      'Enrich from Discogs',
+      `${needsEnrichment} record${needsEnrichment === 1 ? '' : 's'} missing Discogs data. This will search Discogs for each one. This may take a minute or two.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start',
+          onPress: async () => {
+            setIsBackpopulating(true);
+            try {
+              const result = await backpopulateDiscogs(
+                collection,
+                updateCollectionItem,
+                (progress) => setBackpopProgress(progress),
+              );
+              setBackpopProgress(null);
+              Alert.alert(
+                'Enrichment Complete',
+                `Enriched: ${result.enriched}\nNot found: ${result.failed}\nAlready had data: ${result.skipped}`,
+              );
+            } catch {
+              Alert.alert('Error', 'Discogs enrichment failed. Please try again.');
+            } finally {
+              setIsBackpopulating(false);
+              setBackpopProgress(null);
+            }
+          },
+        },
+      ],
     );
   };
 
@@ -208,6 +255,10 @@ export default function PortfolioScreen() {
         return filtered.sort((a, b) => b.createdAt - a.createdAt);
       case 'Oldest':
         return filtered.sort((a, b) => a.createdAt - b.createdAt);
+      case 'Recently Collected':
+        return filtered.sort((a, b) => (b.collectionDate ?? b.createdAt) - (a.collectionDate ?? a.createdAt));
+      case 'Earliest Collected':
+        return filtered.sort((a, b) => (a.collectionDate ?? a.createdAt) - (b.collectionDate ?? b.createdAt));
       case 'A-Z':
         return filtered.sort((a, b) => a.name.localeCompare(b.name));
       default:
@@ -250,6 +301,21 @@ export default function PortfolioScreen() {
             });
           }}
         />
+      )}
+
+      {/* Backpopulate progress banner */}
+      {isBackpopulating && backpopProgress && (
+        <View style={styles.backpopBanner}>
+          <ActivityIndicator size="small" color={colors.accentPrimary} />
+          <View style={{ flex: 1, marginLeft: spacing.sm }}>
+            <Text style={styles.backpopBannerText}>
+              Enriching {backpopProgress.current}/{backpopProgress.total}...
+            </Text>
+            <Text style={styles.backpopBannerSubtext} numberOfLines={1}>
+              {backpopProgress.currentItem}
+            </Text>
+          </View>
+        </View>
       )}
 
       {/* Export Button */}
@@ -490,6 +556,102 @@ export default function PortfolioScreen() {
     }
   };
 
+  const handleItemAddBarcode = (item: AnalysisResult) => {
+    Alert.alert('Add Barcode', undefined, [
+      {
+        text: 'Enter Manually',
+        onPress: () => {
+          Alert.prompt(
+            'Enter Barcode',
+            'Type the barcode number (EAN/UPC)',
+            async (text) => {
+              const trimmed = text?.trim();
+              if (!trimmed || trimmed.length < 8) {
+                if (trimmed) Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+                return;
+              }
+              updateCollectionItem(item.id, { barcode: trimmed });
+              const discogs = await searchByBarcode(trimmed);
+              if (discogs) {
+                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
+                Alert.alert('Barcode Added', 'Discogs data enriched successfully.');
+              } else {
+                Alert.alert('Barcode Saved', 'No Discogs match found.');
+              }
+            },
+            'plain-text',
+            item.barcode ?? '',
+            'number-pad',
+          );
+        },
+      },
+      {
+        text: 'Scan from Photo',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!perm.granted) {
+            Alert.alert('Permission Required', 'Please grant photo library access.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.8 });
+          if (result.canceled) return;
+          try {
+            const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
+            if (barcodes.length > 0) {
+              const code = barcodes[0].data;
+              updateCollectionItem(item.id, { barcode: code });
+              const discogs = await searchByBarcode(code);
+              if (discogs) {
+                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
+                Alert.alert('Barcode Found', `${code} — Discogs data enriched.`);
+              } else {
+                Alert.alert('Barcode Found', `${code} saved. No Discogs match found.`);
+              }
+            } else {
+              Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image.');
+            }
+          } catch {
+            Alert.alert('Scan Failed', 'Unable to scan barcode from image.');
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleItemManagePhotos = async (item: AnalysisResult) => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission Required', 'Please grant photo library access.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 3, quality: 0.8 });
+    if (result.canceled || result.assets.length === 0) return;
+
+    const newUris = result.assets.map((a) => a.uri);
+    const existing = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+
+    if (existing.length > 0) {
+      Alert.alert('Photos', `You have ${existing.length} existing photo${existing.length > 1 ? 's' : ''}.`, [
+        { text: 'Replace All', onPress: () => updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] }) },
+        { text: 'Add to Existing', onPress: () => { const merged = [...existing, ...newUris]; updateCollectionItem(item.id, { images: merged, imageUri: merged[0] }); } },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    } else {
+      updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
+    }
+  };
+
+  const handleItemReanalyze = (item: AnalysisResult) => {
+    router.push({
+      pathname: '/(tabs)/(scanner)/loading',
+      params: {
+        reanalyzeItemId: item.id,
+        source: `portfolio-${activeTab}`,
+      },
+    });
+  };
+
   const handleKebabPress = (item: AnalysisResult) => {
     triggerButtonPress();
     Alert.alert(
@@ -504,6 +666,18 @@ export default function PortfolioScreen() {
               params: { itemData: JSON.stringify(item) },
             });
           },
+        },
+        {
+          text: item.barcode ? 'Update Barcode' : 'Add Barcode',
+          onPress: () => handleItemAddBarcode(item),
+        },
+        {
+          text: 'Add / Replace Photos',
+          onPress: () => handleItemManagePhotos(item),
+        },
+        {
+          text: 'Re-analyze',
+          onPress: () => handleItemReanalyze(item),
         },
         {
           text: 'Delete',
@@ -657,6 +831,15 @@ export default function PortfolioScreen() {
       >
         <Pressable style={styles.sortOverlay} onPress={() => setShowPageMenu(false)}>
           <View style={styles.sortDropdown}>
+            <TouchableOpacity
+              style={styles.pageMenuItem}
+              onPress={handleBackpopulateDiscogs}
+              activeOpacity={0.7}
+              disabled={isBackpopulating}
+            >
+              <Ionicons name="disc-outline" size={20} color={colors.accentPrimary} />
+              <Text style={styles.pageMenuItemText}>Enrich from Discogs</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.pageMenuItem}
               onPress={handleDeleteAllData}
@@ -1057,10 +1240,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: 14,
   },
+  pageMenuItemText: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
   pageMenuItemTextDestructive: {
     ...typography.body,
     color: colors.error,
     fontWeight: '600',
+  },
+  backpopBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  backpopBannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+  },
+  backpopBannerSubtext: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   // Selection mode
   selectionHeader: {

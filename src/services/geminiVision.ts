@@ -93,10 +93,18 @@ const PAIRING_INSTRUCTIONS = `
 "foodPairing": "A specific food that pairs with the mood/genre/era of this record (e.g. 'Slow-smoked brisket with cornbread', 'Fresh oysters with mignonette'). Max 100 characters.",
 "drinkPairing": "A specific drink that pairs with the mood/genre/era of this record (e.g. 'Bourbon old fashioned', 'Espresso martini', 'Chilled sake'). Max 100 characters."`;
 
-function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string): string {
+function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: string, hasImages: boolean): string {
   const tracklistStr = discogsData.tracklist.length > 0
-    ? discogsData.tracklist.slice(0, 10).join(', ')
+    ? discogsData.tracklist.slice(0, 10).map((t) => `${t.position} ${t.title}`.trim()).join(', ')
     : 'N/A';
+
+  const stylesStr = discogsData.styles.length > 0
+    ? discogsData.styles.join(', ')
+    : 'N/A';
+
+  const instruction = hasImages
+    ? 'Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write pairing recommendations.'
+    : 'Using this reference data (no images provided), provide your best identification, estimate the market value for this specific pressing based on known data, and write pairing recommendations. Since no images are available, set condition to "Uncertain".';
 
   return `The following record has been identified via barcode lookup:
 Artist: ${discogsData.artist}
@@ -104,12 +112,13 @@ Title: ${discogsData.title}
 Year: ${discogsData.year}
 Label: ${discogsData.label}
 Genre: ${discogsData.genre}
+Styles: ${stylesStr}
 Cat#: ${discogsData.catNo}
 Country: ${discogsData.country}
 Formats: ${discogsData.formats.join(', ')}
 Tracklist: ${tracklistStr}
 
-Using this reference data and the attached images, confirm or refine the identification, assess the physical condition of the vinyl and sleeve, estimate the market value for this specific pressing, and write pairing recommendations.
+${instruction}
 
 ${basePrompt}
 
@@ -150,22 +159,23 @@ export async function analyzeImages(
   console.log('[Gemini] Model:', model);
   console.log('[Gemini] Images:', capturedImages.map((img) => `${img.type}: ${img.uri}`));
 
-  // Read all images as base64 in parallel
-  const imageParts = await Promise.all(
+  // Read all images as base64 in parallel, skipping any that no longer exist on disk
+  const imageResults = await Promise.all(
     capturedImages.map(async (img) => {
-      const base64 = await readAsStringAsync(img.uri, {
-        encoding: EncodingType.Base64,
-      });
-      const mimeType = getMimeType(img.uri);
-      console.log(`[Gemini] ${img.type} - MIME: ${mimeType}, Base64 length: ${base64.length}`);
-      return {
-        inlineData: {
-          mimeType,
-          data: base64,
-        },
-      };
+      try {
+        const base64 = await readAsStringAsync(img.uri, {
+          encoding: EncodingType.Base64,
+        });
+        const mimeType = getMimeType(img.uri);
+        console.log(`[Gemini] ${img.type} - MIME: ${mimeType}, Base64 length: ${base64.length}`);
+        return { inlineData: { mimeType, data: base64 } };
+      } catch {
+        console.log(`[Gemini] ⚠ Skipping ${img.type} — file not found: ${img.uri}`);
+        return null;
+      }
     })
   );
+  const imageParts = imageResults.filter((p): p is NonNullable<typeof p> => p !== null);
 
   // Initialize Gemini client
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -178,8 +188,9 @@ export async function analyzeImages(
   });
 
   // Build the prompt: enrich with Discogs data (Scenario A) or add vibe pairing only (Scenario B)
+  const hasImages = imageParts.length > 0;
   const prompt = discogsData
-    ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt)
+    ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt, hasImages)
     : addPairingsToPrompt(systemPrompt);
 
   console.log('[Gemini] Prompt scenario:', discogsData ? 'A (Discogs-enriched)' : 'B (visual-only)');
@@ -290,6 +301,25 @@ export async function analyzeImages(
     imageUri: (capturedImages.find((img) => img.type === 'front') ?? capturedImages[0])?.uri,
     images: capturedImages.map((img) => img.uri),
     createdAt: Date.now(),
+    // Merge Discogs enrichment data when available
+    ...(discogsData && {
+      ...(discogsData.thumbnail && { discogsThumbnail: discogsData.thumbnail }),
+      ...(discogsData.primaryImage && { discogsImage: discogsData.primaryImage }),
+      ...(discogsData.discogsImages.length > 0 && { discogsImages: discogsData.discogsImages }),
+      ...(discogsData.styles.length > 0 && { styles: discogsData.styles }),
+      ...(discogsData.weight && { weight: discogsData.weight }),
+      ...(discogsData.tracklist.length > 0 && { discogsTracklist: discogsData.tracklist }),
+      ...(discogsData.companies.length > 0 && { companies: discogsData.companies }),
+      ...(discogsData.extraArtists.length > 0 && { extraArtists: discogsData.extraArtists }),
+      ...(discogsData.discogsUrl && { discogsUrl: discogsData.discogsUrl }),
+      ...(discogsData.discogsId && { discogsId: discogsData.discogsId }),
+      ...(discogsData.lowestPrice != null && { lowestPrice: discogsData.lowestPrice }),
+      ...(discogsData.numForSale != null && { numForSale: discogsData.numForSale }),
+      ...(discogsData.community && {
+        communityHave: discogsData.community.have,
+        communityWant: discogsData.community.want,
+      }),
+    }),
   };
 
   console.log('[Gemini] ✅ Analysis complete:', {
