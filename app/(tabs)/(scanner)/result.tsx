@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -919,19 +919,6 @@ export default function ResultScreen() {
       router.navigate('/(tabs)/(home)');
     }
   }, [params.source]);
-
-  // Intercept native swipe-back gesture so it respects our source-based routing
-  const navigation = useNavigation();
-  const isNavigatingRef = useRef(false);
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void }) => {
-      if (isNavigatingRef.current) return; // allow our own navigation through
-      e.preventDefault();
-      isNavigatingRef.current = true;
-      navigateBack();
-    });
-    return unsubscribe;
-  }, [navigation, navigateBack]);
 
   const handleBack = () => {
     triggerButtonPress();

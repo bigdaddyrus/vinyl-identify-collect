@@ -53,7 +53,12 @@ export default function ScannerLayout() {
             gestureEnabled: false,
           }}
         />
-        <Stack.Screen name="result" />
+        <Stack.Screen
+          name="result"
+          options={{
+            gestureEnabled: false,
+          }}
+        />
         <Stack.Screen
           name="notfound"
           options={{
