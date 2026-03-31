@@ -59,7 +59,7 @@ export default function PortfolioScreen() {
     if (tab) setActiveTab(tab);
   }, [tab]);
 
-  const [sortBy, setSortBy] = useState('Highest Value');
+  const [sortBy, setSortBy] = useState('Recently Collected');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showPageMenu, setShowPageMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

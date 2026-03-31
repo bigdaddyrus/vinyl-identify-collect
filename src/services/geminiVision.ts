@@ -159,22 +159,23 @@ export async function analyzeImages(
   console.log('[Gemini] Model:', model);
   console.log('[Gemini] Images:', capturedImages.map((img) => `${img.type}: ${img.uri}`));
 
-  // Read all images as base64 in parallel
-  const imageParts = await Promise.all(
+  // Read all images as base64 in parallel, skipping any that no longer exist on disk
+  const imageResults = await Promise.all(
     capturedImages.map(async (img) => {
-      const base64 = await readAsStringAsync(img.uri, {
-        encoding: EncodingType.Base64,
-      });
-      const mimeType = getMimeType(img.uri);
-      console.log(`[Gemini] ${img.type} - MIME: ${mimeType}, Base64 length: ${base64.length}`);
-      return {
-        inlineData: {
-          mimeType,
-          data: base64,
-        },
-      };
+      try {
+        const base64 = await readAsStringAsync(img.uri, {
+          encoding: EncodingType.Base64,
+        });
+        const mimeType = getMimeType(img.uri);
+        console.log(`[Gemini] ${img.type} - MIME: ${mimeType}, Base64 length: ${base64.length}`);
+        return { inlineData: { mimeType, data: base64 } };
+      } catch {
+        console.log(`[Gemini] ⚠ Skipping ${img.type} — file not found: ${img.uri}`);
+        return null;
+      }
     })
   );
+  const imageParts = imageResults.filter((p): p is NonNullable<typeof p> => p !== null);
 
   // Initialize Gemini client
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -187,7 +188,7 @@ export async function analyzeImages(
   });
 
   // Build the prompt: enrich with Discogs data (Scenario A) or add vibe pairing only (Scenario B)
-  const hasImages = capturedImages.length > 0;
+  const hasImages = imageParts.length > 0;
   const prompt = discogsData
     ? buildDiscogsEnrichedPrompt(discogsData, systemPrompt, hasImages)
     : addPairingsToPrompt(systemPrompt);
