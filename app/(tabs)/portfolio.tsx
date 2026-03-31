@@ -15,14 +15,13 @@ import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import * as ImagePicker from 'expo-image-picker';
 import { scanFromURLAsync } from 'expo-camera';
-import { AnalysisResult, CapturedImage, CollectionSet } from '@/types';
+import { AnalysisResult, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
 import { backpopulateDiscogs, BackpopulateProgress } from '@/services/backpopulateDiscogs';
-import { searchByBarcode, searchByQuery } from '@/services/discogs';
-import { analyzeImages } from '@/services/geminiVision';
+import { searchByBarcode } from '@/services/discogs';
 import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
 const DEFAULT_TAB_BAR_STYLE = {
@@ -70,7 +69,6 @@ export default function PortfolioScreen() {
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [isBackpopulating, setIsBackpopulating] = useState(false);
   const [backpopProgress, setBackpopProgress] = useState<BackpopulateProgress | null>(null);
-  const [reanalyzingId, setReanalyzingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     navigation.getParent()?.setOptions({
@@ -644,48 +642,14 @@ export default function PortfolioScreen() {
     }
   };
 
-  const handleItemReanalyze = async (item: AnalysisResult) => {
-    if (reanalyzingId) return;
-    setReanalyzingId(item.id);
-    try {
-      const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
-      const capturedImages: CapturedImage[] = existingImages.map((uri, i) => ({
-        type: (i === 0 ? 'front' : i === 1 ? 'back' : 'label') as CapturedImage['type'],
-        uri,
-      }));
-
-      let discogsData = item.barcode ? await searchByBarcode(item.barcode) : null;
-      if (!discogsData && item.name) {
-        discogsData = await searchByQuery(item.name.replace(/\s*[—–-]\s*/g, ' ').replace(/\([^)]*\)/g, '').trim());
-      }
-
-      const result = await analyzeImages(capturedImages, discogsData, item.barcode);
-      updateCollectionItem(item.id, {
-        name: result.name,
-        origin: result.origin,
-        year: result.year,
-        estimatedValue: result.estimatedValue,
-        estimatedValueLow: result.estimatedValueLow,
-        estimatedValueHigh: result.estimatedValueHigh,
-        confidence: result.confidence,
-        description: result.description,
-        label: result.label,
-        genre: result.genre,
-        rarity: result.rarity,
-        condition: result.condition,
-        vibePairing: result.vibePairing,
-        foodPairing: result.foodPairing,
-        drinkPairing: result.drinkPairing,
-        albumArtQuery: result.albumArtQuery,
-        extendedDetails: result.extendedDetails,
-        countryCode: result.countryCode,
-      });
-      Alert.alert('Re-analysis Complete', 'Item data has been refreshed.');
-    } catch (err) {
-      Alert.alert('Re-analysis Failed', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setReanalyzingId(null);
-    }
+  const handleItemReanalyze = (item: AnalysisResult) => {
+    router.push({
+      pathname: '/(tabs)/(scanner)/loading',
+      params: {
+        reanalyzeItemId: item.id,
+        source: `portfolio-${activeTab}`,
+      },
+    });
   };
 
   const handleKebabPress = (item: AnalysisResult) => {
@@ -712,7 +676,7 @@ export default function PortfolioScreen() {
           onPress: () => handleItemManagePhotos(item),
         },
         {
-          text: reanalyzingId === item.id ? 'Re-analyzing...' : 'Re-analyze',
+          text: 'Re-analyze',
           onPress: () => handleItemReanalyze(item),
         },
         {

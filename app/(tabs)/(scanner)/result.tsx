@@ -31,13 +31,11 @@ import { GradientButton } from '@/components/GradientButton';
 import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
-import { AnalysisResult, ExtendedDetailSection, CapturedImage, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
+import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
 import { getDisplayName } from '@/data/countryCoordinates';
-import { searchByBarcode, searchByQuery } from '@/services/discogs';
-import type { DiscogsResult } from '@/services/discogs';
-import { analyzeImages } from '@/services/geminiVision';
+import { searchByBarcode } from '@/services/discogs';
 import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -768,7 +766,6 @@ export default function ResultScreen() {
   const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
   const [pendingSave, setPendingSave] = useState(false);
   const [showSetPicker, setShowSetPicker] = useState(false);
-  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   const onImageScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -950,7 +947,7 @@ export default function ResultScreen() {
     options.push({ text: 'Edit', onPress: handleEdit });
     options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
     options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
-    options.push({ text: isReanalyzing ? 'Re-analyzing...' : 'Re-analyze', onPress: handleReanalyze });
+    options.push({ text: 'Re-analyze', onPress: handleReanalyze });
 
     if (isInCollection && !pendingSave) {
       options.push({
@@ -1096,60 +1093,15 @@ export default function ResultScreen() {
   };
 
   // ── Re-analyze with LLM ──
-  const handleReanalyze = async () => {
+  const handleReanalyze = () => {
     triggerButtonPress();
-    if (isReanalyzing) return;
-
-    setIsReanalyzing(true);
-    try {
-      // Gather existing images as CapturedImage[]
-      const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
-      const capturedImages: CapturedImage[] = existingImages.map((uri, i) => ({
-        type: (i === 0 ? 'front' : i === 1 ? 'back' : 'label') as CapturedImage['type'],
-        uri,
-      }));
-
-      // Fetch Discogs data if we have a barcode
-      let discogsData: DiscogsResult | null = null;
-      if (item.barcode) {
-        discogsData = await searchByBarcode(item.barcode);
-      }
-      if (!discogsData && item.name) {
-        discogsData = await searchByQuery(item.name.replace(/\s*[—–-]\s*/g, ' ').replace(/\([^)]*\)/g, '').trim());
-      }
-
-      const result = await analyzeImages(capturedImages, discogsData, item.barcode);
-
-      // Preserve fields that shouldn't be overwritten
-      const updates: Partial<AnalysisResult> = {
-        name: result.name,
-        origin: result.origin,
-        year: result.year,
-        estimatedValue: result.estimatedValue,
-        estimatedValueLow: result.estimatedValueLow,
-        estimatedValueHigh: result.estimatedValueHigh,
-        confidence: result.confidence,
-        description: result.description,
-        label: result.label,
-        genre: result.genre,
-        rarity: result.rarity,
-        condition: result.condition,
-        vibePairing: result.vibePairing,
-        foodPairing: result.foodPairing,
-        drinkPairing: result.drinkPairing,
-        albumArtQuery: result.albumArtQuery,
-        extendedDetails: result.extendedDetails,
-        countryCode: result.countryCode,
-      };
-
-      updateCollectionItem(item.id, updates);
-      Alert.alert('Re-analysis Complete', 'Item data has been refreshed.');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      Alert.alert('Re-analysis Failed', msg);
-    } finally {
-      setIsReanalyzing(false);
-    }
+    router.push({
+      pathname: '/(tabs)/(scanner)/loading',
+      params: {
+        reanalyzeItemId: item.id,
+        source: (params.source as string) ?? '',
+      },
+    });
   };
 
   const currentSetIds = storeItem?.setIds ?? paramResult.setIds ?? [];
