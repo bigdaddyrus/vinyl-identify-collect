@@ -35,6 +35,7 @@ import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompan
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
 import { getDisplayName } from '@/data/countryCoordinates';
+import { File } from 'expo-file-system';
 import { searchByBarcode } from '@/services/discogs';
 import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
@@ -805,6 +806,23 @@ export default function ResultScreen() {
     .map((img) => img.uri)
     .filter((uri) => uri && !userImages.includes(uri));
   const imageList: string[] = [...userImages, ...discogsFullImages];
+
+  // Prune dead local images (e.g. after cache clear) on mount
+  useEffect(() => {
+    if (!isInCollection) return;
+    const localUris = userImages.filter((uri) => uri.startsWith('file://'));
+    if (localUris.length === 0) return;
+
+    const dead = localUris.filter((uri) => {
+      try { return !new File(uri).exists; } catch { return true; }
+    });
+    if (dead.length === 0) return;
+
+    const deadSet = new Set(dead);
+    const cleanedImages = (item.images ?? []).filter((uri) => !deadSet.has(uri));
+    const cleanedUri = deadSet.has(item.imageUri ?? '') ? cleanedImages[0] ?? undefined : item.imageUri;
+    updateCollectionItem(item.id, { images: cleanedImages, imageUri: cleanedUri });
+  }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Value formatting ──
   const formatValue = (value: number) => {
