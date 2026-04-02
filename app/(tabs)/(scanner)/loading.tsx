@@ -14,32 +14,11 @@ import { LoadingStepItem } from '@/components/LoadingStepItem';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerPriceReveal } from '@/utils/haptics';
-import { getRandomMockResult } from '@/mock/analysisData';
 import { analyzeImages } from '@/services/geminiVision';
 import { searchByBarcode, searchByQuery } from '@/services/discogs';
 import type { DiscogsResult } from '@/services/discogs';
 import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
-/** Merge Discogs enrichment fields into an AnalysisResult (used for mock/fallback paths) */
-function mergeDiscogsData(result: AnalysisResult, discogs: DiscogsResult | null): void {
-  if (!discogs) return;
-  if (discogs.thumbnail) result.discogsThumbnail = discogs.thumbnail;
-  if (discogs.primaryImage) result.discogsImage = discogs.primaryImage;
-  if (discogs.discogsImages.length > 0) result.discogsImages = discogs.discogsImages;
-  if (discogs.styles.length > 0) result.styles = discogs.styles;
-  if (discogs.weight) result.weight = discogs.weight;
-  if (discogs.tracklist.length > 0) result.discogsTracklist = discogs.tracklist;
-  if (discogs.companies.length > 0) result.companies = discogs.companies;
-  if (discogs.extraArtists.length > 0) result.extraArtists = discogs.extraArtists;
-  if (discogs.discogsUrl) result.discogsUrl = discogs.discogsUrl;
-  if (discogs.discogsId) result.discogsId = discogs.discogsId;
-  if (discogs.lowestPrice != null) result.lowestPrice = discogs.lowestPrice;
-  if (discogs.numForSale != null) result.numForSale = discogs.numForSale;
-  if (discogs.community) {
-    result.communityHave = discogs.community.have;
-    result.communityWant = discogs.community.want;
-  }
-}
 import { useAppStore } from '@/store/useAppStore';
 import { useScanCart } from '@/context/ScanCartContext';
 import { AnalysisResult, CapturedImage } from '@/types';
@@ -326,40 +305,12 @@ export default function LoadingScreen() {
         }
 
         if (parsedCart.length > 0) {
-          try {
-            result = await analyzeImages(parsedCart, discogsData, effectiveBarcode);
-          } catch (apiError) {
-            const message = apiError instanceof Error ? apiError.message : '';
-            if (__DEV__ && message.includes('API key not configured')) {
-              result = getRandomMockResult();
-              result.imageUri = imageUri;
-              result.images = parsedCart.map((img) => img.uri);
-              if (effectiveBarcode) result.barcode = effectiveBarcode;
-              mergeDiscogsData(result, discogsData);
-            } else {
-              throw apiError;
-            }
-          }
+          result = await analyzeImages(parsedCart, discogsData, effectiveBarcode);
         } else if (discogsData) {
           // No images but have Discogs data (from barcode or name search) — send to Gemini
-          try {
-            result = await analyzeImages([], discogsData, effectiveBarcode);
-          } catch (apiError) {
-            const message = apiError instanceof Error ? apiError.message : '';
-            if (__DEV__ && message.includes('API key not configured')) {
-              result = getRandomMockResult();
-              if (effectiveBarcode) result.barcode = effectiveBarcode;
-              mergeDiscogsData(result, discogsData);
-            } else {
-              throw apiError;
-            }
-          }
-        } else if (__DEV__) {
-          result = getRandomMockResult();
-          if (effectiveBarcode) result.barcode = effectiveBarcode;
-          mergeDiscogsData(result, discogsData);
+          result = await analyzeImages([], discogsData, effectiveBarcode);
         } else {
-          throw new Error('No images provided for analysis.');
+          throw new Error('No images or metadata available for analysis.');
         }
 
         // For re-analyze, merge Discogs enrichment into the result
@@ -372,6 +323,21 @@ export default function LoadingScreen() {
         setApiDone(true);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+
+        // Re-analyze failure: alert and go back — original item stays intact
+        if (isReanalyze) {
+          if (stepTimerRef.current) {
+            clearTimeout(stepTimerRef.current);
+            stepTimerRef.current = null;
+          }
+          Alert.alert(
+            'Re-analysis Failed',
+            message,
+            [{ text: 'OK', onPress: () => router.back() }],
+          );
+          return;
+        }
+
         setError(message);
       }
     };
