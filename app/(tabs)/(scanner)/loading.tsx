@@ -105,8 +105,6 @@ export default function LoadingScreen() {
       clearTimeout(stepTimerRef.current);
       stepTimerRef.current = null;
     }
-    // Fill progress to 100%
-    progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.cubic) });
     triggerPriceReveal();
 
     // Re-analyze mode: update the existing item in store and navigate back
@@ -239,7 +237,7 @@ export default function LoadingScreen() {
   useEffect(() => {
     if (error) return;
 
-    const stepDuration = 1200;
+    const stepDuration = 1800;
     const totalSteps = steps.length;
     // Reserve the last ~15% of the bar for when the API actually finishes
     const maxProgressBeforeApi = 85;
@@ -248,10 +246,14 @@ export default function LoadingScreen() {
     const advanceStep = () => {
       stepIdx++;
 
-      if (stepIdx >= totalSteps) {
-        // All steps visited — signal completion so navigation guard passes.
+      if (stepIdx >= totalSteps - 1) {
+        // Reached the last step — keep it as "active" (spinning) until API finishes
+        setCurrentStepIndex(totalSteps - 1);
+        progressWidth.value = withTiming(maxProgressBeforeApi, {
+          duration: stepDuration * 0.8,
+          easing: Easing.out(Easing.cubic),
+        });
         stepTimerRef.current = null;
-        setCurrentStepIndex(totalSteps);
         return;
       }
 
@@ -349,15 +351,25 @@ export default function LoadingScreen() {
     };
   }, [error, imageUri, steps.length, progressWidth, parsedCart, effectiveBarcode, isReanalyze, reanalyzeItem]);
 
-  // When API finishes and the step sequence has completed, navigate to the result
+  // When API finishes and steps have reached the last step, mark it complete then navigate
   useEffect(() => {
-    if (!apiDone || !apiResultRef.current || currentStepIndex < steps.length) return;
-    // Small delay so the user sees the final checkmark pop
+    if (!apiDone || !apiResultRef.current) return;
+    // Still advancing through earlier steps — wait
+    if (currentStepIndex < steps.length - 1) return;
+
+    if (currentStepIndex === steps.length - 1) {
+      // Mark the last step as complete (will re-trigger this effect)
+      setCurrentStepIndex(steps.length);
+      return;
+    }
+
+    // All steps visually complete — animate progress to 100% and navigate
+    progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.cubic) });
     const timer = setTimeout(() => {
       navigateToResult(apiResultRef.current!);
-    }, 400);
+    }, 500);
     return () => clearTimeout(timer);
-  }, [apiDone, currentStepIndex, steps.length, navigateToResult]);
+  }, [apiDone, currentStepIndex, steps.length, navigateToResult, progressWidth]);
 
   const handleRetry = () => {
     setError(null);
@@ -404,7 +416,7 @@ export default function LoadingScreen() {
   const getStepStatus = (index: number): StepStatus => {
     if (index < currentStepIndex) return 'complete';
     if (index === currentStepIndex && currentStepIndex < steps.length) return 'active';
-    if (currentStepIndex >= steps.length) return 'complete'; // all done
+    if (currentStepIndex >= steps.length && apiDone) return 'complete';
     return 'pending';
   };
 

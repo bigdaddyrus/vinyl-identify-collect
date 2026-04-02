@@ -947,12 +947,11 @@ export default function ResultScreen() {
 
     if (isInCollection && !pendingSave) {
       options.push({ text: 'Add to Set', onPress: () => setShowSetPicker(true) });
+      options.push({ text: 'Edit', onPress: handleEdit });
+      options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
+      options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
+      options.push({ text: 'Re-analyze', onPress: handleReanalyze });
     }
-
-    options.push({ text: 'Edit', onPress: handleEdit });
-    options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
-    options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
-    options.push({ text: 'Re-analyze', onPress: handleReanalyze });
 
     if (isInCollection && !pendingSave) {
       options.push({

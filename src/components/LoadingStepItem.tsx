@@ -5,7 +5,6 @@ import Animated, {
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  withSpring,
   cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
@@ -40,11 +39,11 @@ export function LoadingStepItem({ text, status }: Props) {
         false
       );
     } else if (status === 'complete') {
-      // Stop rotation and show checkmark with pop animation
+      // Stop rotation and show checkmark with smooth scale-up (no bounce)
       cancelAnimation(rotation);
-      scale.value = withSpring(1, {
-        damping: 8,
-        stiffness: 200,
+      scale.value = withTiming(1, {
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
       });
     }
   }, [status]);
