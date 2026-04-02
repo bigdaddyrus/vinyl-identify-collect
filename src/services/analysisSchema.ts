@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
 export const analysisResponseSchema = z.object({
-  name: z.string().default('Unknown Record'),
+  artist: z.string().default('Unknown Artist'),
+  albumName: z.string().default('Unknown Album'),
+  pressingName: z.string().default(''),
   origin: z.string().default('Unknown'),
   year: z.string().default('Unknown'),
   estimatedValue: z.coerce.number().default(0),

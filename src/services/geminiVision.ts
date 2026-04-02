@@ -3,6 +3,7 @@ import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import { AnalysisResult, CapturedImage, ExtendedDetailSection } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { normalizeOrigin } from '@/data/countryCoordinates';
+import { composeDisplayName } from '@/utils/displayName';
 import { analysisResponseSchema } from './analysisSchema';
 import type { DiscogsResult } from './discogs';
 
@@ -280,7 +281,10 @@ export async function analyzeImages(
 
   const result: AnalysisResult = {
     id: `scan-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-    name: validated.name,
+    artist: validated.artist,
+    albumName: validated.albumName,
+    ...(validated.pressingName ? { pressingName: validated.pressingName } : {}),
+    name: composeDisplayName(validated.artist, validated.albumName, validated.pressingName),
     origin: normalizeOrigin(validated.origin),
     year: validated.year,
     estimatedValue: validated.estimatedValue || 0,
@@ -321,6 +325,17 @@ export async function analyzeImages(
       }),
     }),
   };
+
+  // Prefer Discogs artist/title over AI defaults when available
+  if (discogsData) {
+    if (result.artist === 'Unknown Artist' && discogsData.artist) {
+      result.artist = discogsData.artist;
+    }
+    if (result.albumName === 'Unknown Album' && discogsData.title) {
+      result.albumName = discogsData.title;
+    }
+    result.name = composeDisplayName(result.artist, result.albumName, result.pressingName);
+  }
 
   console.log('[Gemini] ✅ Analysis complete:', {
     name: result.name,

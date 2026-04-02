@@ -9,6 +9,9 @@ export const mockAnalysisResults: AnalysisResult[] = [
   {
     id: 'mock-1',
     name: '1856 British Guiana One-Cent Magenta',
+    artist: '',
+    albumName: '1856 British Guiana One-Cent Magenta',
+    pressingName: '',
     origin: 'British Guiana',
     year: '1856',
     estimatedValue: 9480000,
@@ -75,6 +78,9 @@ export const mockAnalysisResults: AnalysisResult[] = [
   {
     id: 'mock-2',
     name: '1918 Inverted Jenny',
+    artist: '',
+    albumName: '1918 Inverted Jenny',
+    pressingName: '',
     origin: 'United States',
     year: '1918',
     estimatedValue: 1350000,
@@ -132,6 +138,9 @@ export const mockAnalysisResults: AnalysisResult[] = [
   {
     id: 'mock-3',
     name: '1869 Pictorial 24¢ Invert',
+    artist: '',
+    albumName: '1869 Pictorial 24¢ Invert',
+    pressingName: '',
     origin: 'United States',
     year: '1869',
     estimatedValue: 125000,

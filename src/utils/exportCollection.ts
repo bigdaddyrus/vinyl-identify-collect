@@ -19,7 +19,9 @@ export async function exportCollectionAsJSON(items: AnalysisResult[]): Promise<v
 
   const sanitizedCollection = items.map((item) => ({
     ...item,
-    discogsQuery: `${item.origin} - ${item.name} - ${item.year}`,
+    discogsQuery: item.artist && item.albumName
+      ? `${item.origin} - ${item.artist} - ${item.albumName} - ${item.year}`
+      : `${item.origin} - ${item.name} - ${item.year}`,
     imageUri: sanitizeUri(item.imageUri),
     images: item.images?.map(sanitizeUri).filter(Boolean),
   }));
