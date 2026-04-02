@@ -35,6 +35,8 @@ export function GradientButton({
         onPress={handlePress}
         disabled={disabled}
         activeOpacity={0.7}
+        accessibilityLabel={text}
+        accessibilityRole="button"
       >
         {icon && <Ionicons name={icon} size={20} color={colors.textPrimary} style={styles.icon} />}
         <Text style={[styles.secondaryButtonText, textStyle]}>{text}</Text>
@@ -49,6 +51,8 @@ export function GradientButton({
       onPress={handlePress}
       disabled={disabled}
       activeOpacity={0.8}
+      accessibilityLabel={text}
+      accessibilityRole="button"
     >
       <LinearGradient
         colors={gradients.luxuryGold}

@@ -324,7 +324,7 @@ export default function ScannerHomeScreen() {
       <SafeAreaView edges={['top']} style={styles.topBarSafe}>
         <View style={styles.topBar}>
           {/* Close — clear cart and go home */}
-          <TouchableOpacity style={styles.topBarIcon} onPress={() => { resetCart(); router.navigate('/(tabs)/(home)'); }} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.topBarIcon} onPress={() => { resetCart(); router.navigate('/(tabs)/(home)'); }} activeOpacity={0.7} accessibilityLabel="Close scanner" accessibilityRole="button">
             <Ionicons name="close" size={22} color={colors.white} />
           </TouchableOpacity>
 
@@ -353,7 +353,7 @@ export default function ScannerHomeScreen() {
             )}
 
             {/* Flash toggle */}
-            <TouchableOpacity style={styles.topBarIcon} onPress={toggleFlash} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.topBarIcon} onPress={toggleFlash} activeOpacity={0.7} accessibilityLabel={flashEnabled ? 'Turn off flash' : 'Turn on flash'} accessibilityRole="button">
               <Ionicons
                 name={flashEnabled ? 'flash' : 'flash-off'}
                 size={20}
@@ -502,6 +502,8 @@ export default function ScannerHomeScreen() {
                 style={styles.sideButton}
                 onPress={handleGalleryPick}
                 activeOpacity={0.7}
+                accessibilityLabel="Choose from gallery"
+                accessibilityRole="button"
               >
                 <Ionicons name="images" size={24} color={colors.white} />
               </TouchableOpacity>
@@ -513,6 +515,8 @@ export default function ScannerHomeScreen() {
                   style={styles.captureButton}
                   onPress={handleCapture}
                   activeOpacity={0.8}
+                  accessibilityLabel="Take photo"
+                  accessibilityRole="button"
                 >
                   <View style={styles.captureButtonInner} />
                 </TouchableOpacity>

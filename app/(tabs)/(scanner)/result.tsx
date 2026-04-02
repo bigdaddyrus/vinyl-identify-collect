@@ -947,12 +947,11 @@ export default function ResultScreen() {
 
     if (isInCollection && !pendingSave) {
       options.push({ text: 'Add to Set', onPress: () => setShowSetPicker(true) });
+      options.push({ text: 'Edit', onPress: handleEdit });
+      options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
+      options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
+      options.push({ text: 'Re-analyze', onPress: handleReanalyze });
     }
-
-    options.push({ text: 'Edit', onPress: handleEdit });
-    options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
-    options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
-    options.push({ text: 'Re-analyze', onPress: handleReanalyze });
 
     if (isInCollection && !pendingSave) {
       options.push({
@@ -1123,10 +1122,10 @@ export default function ResultScreen() {
       {/* ── Header Bar ── */}
       <SafeAreaView edges={['top']} style={styles.headerSafe}>
         <View style={styles.headerBar}>
-          <TouchableOpacity style={styles.headerButton} onPress={handleBack} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.headerButton} onPress={handleBack} activeOpacity={0.7} accessibilityLabel="Go back" accessibilityRole="button">
             <Ionicons name="chevron-back" size={24} color={colors.white} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton} onPress={handleHeaderKebab} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.headerButton} onPress={handleHeaderKebab} activeOpacity={0.7} accessibilityLabel="More options" accessibilityRole="button">
             <Ionicons name="ellipsis-vertical" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -1370,10 +1369,10 @@ export default function ResultScreen() {
           <SafeAreaView edges={['bottom']} style={styles.bottomBarContent}>
             {/* Secondary actions */}
             <View style={styles.secondaryActions}>
-              <TouchableOpacity style={styles.iconButton} onPress={handleScanNew} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconButton} onPress={handleScanNew} activeOpacity={0.7} accessibilityLabel="Scan new record" accessibilityRole="button">
                 <Ionicons name="camera" size={22} color={colors.white} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={handleShare} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconButton} onPress={handleShare} activeOpacity={0.7} accessibilityLabel="Share" accessibilityRole="button">
                 <Ionicons name="share-outline" size={22} color={colors.white} />
               </TouchableOpacity>
             </View>
@@ -1385,6 +1384,8 @@ export default function ResultScreen() {
                   style={styles.removeButton}
                   onPress={handleRemove}
                   activeOpacity={0.8}
+                  accessibilityLabel="Remove from collection"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeButtonText}>Remove</Text>
                 </TouchableOpacity>

@@ -11,8 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vinylcollect.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses your camera to identify and value vinyl records."
+        "NSCameraUsageDescription": "This app uses your camera to identify and value vinyl records.",
+        "NSPhotoLibraryUsageDescription": "Select vinyl record photos from your library for identification."
       }
     },
     "android": {

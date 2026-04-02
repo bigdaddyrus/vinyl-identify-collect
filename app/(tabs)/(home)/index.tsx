@@ -65,7 +65,7 @@ export default function HomeScreen() {
 
   // Shuffle collection items for the stacked display using Fisher-Yates
   const stackImages = useMemo(() => {
-    const withImages = collection.filter((item) => item.imageUri);
+    const withImages = collection.filter((item) => item.imageUri || item.discogsImage || item.discogsThumbnail);
     const shuffled = [...withImages];
     // Seeded shuffle so it's stable during the same mount
     let seed = shuffleSeed;
@@ -135,6 +135,8 @@ export default function HomeScreen() {
                 style={styles.stackContainer}
                 onPress={() => router.push('/(tabs)/portfolio')}
                 activeOpacity={0.8}
+                accessibilityLabel="View collection"
+                accessibilityRole="button"
               >
                 {stackImages.map((item, index) => (
                   <View
@@ -151,7 +153,7 @@ export default function HomeScreen() {
                     ]}
                   >
                     <Image
-                      source={{ uri: item.imageUri }}
+                      source={{ uri: item.imageUri || item.discogsImage || item.discogsThumbnail }}
                       style={styles.stackImage}
                       contentFit="cover"
                     />
@@ -184,7 +186,7 @@ export default function HomeScreen() {
         {/* Export Data */}
         {!isEmpty && (
           <View style={styles.exportContainer}>
-            <TouchableOpacity style={styles.exportButton} onPress={handleExportData} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.exportButton} onPress={handleExportData} activeOpacity={0.7} accessibilityLabel="Export data as JSON" accessibilityRole="button">
               <Ionicons name="download-outline" size={18} color={colors.accentPrimary} />
               <Text style={styles.exportButtonText}>
                 {appConfig.collection.exportDataText ?? 'Export Data'}

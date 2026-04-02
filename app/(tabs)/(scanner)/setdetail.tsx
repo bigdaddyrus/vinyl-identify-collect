@@ -1,25 +1,50 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { useState, useCallback, useLayoutEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CollectionCard } from '@/components/CollectionCard';
 import { AddToSetModal } from '@/components/AddToSetModal';
-import { GradientButton } from '@/components/GradientButton';
+import { BulkMoveModal } from '@/components/BulkMoveModal';
 import { useAppStore } from '@/store/useAppStore';
 import { AnalysisResult } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { normalizeOrigin } from '@/data/countryCoordinates';
+import { exportCollectionToPDF } from '@/utils/pdf';
+import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
+
+const DEFAULT_TAB_BAR_STYLE = {
+  backgroundColor: '#0A0A0A',
+  borderTopWidth: 0,
+  paddingTop: 8,
+  paddingBottom: 8,
+  height: 70,
+} as const;
 
 export default function SetDetailScreen() {
   const { setId } = useLocalSearchParams<{ setId: string }>();
+  const navigation = useNavigation();
   const sets = useAppStore((s) => s.sets);
   const collection = useAppStore((s) => s.collection);
   const removeItemFromSet = useAppStore((s) => s.removeItemFromSet);
   const removeFromCollection = useAppStore((s) => s.removeFromCollection);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkMove, setShowBulkMove] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Hide bottom tab bar when in selection mode
+  useLayoutEffect(() => {
+    // setdetail is inside (scanner) stack, so getParent() reaches the tabs navigator
+    navigation.getParent()?.setOptions({
+      tabBarStyle: isSelecting
+        ? { display: 'none' as const }
+        : DEFAULT_TAB_BAR_STYLE,
+    });
+  }, [isSelecting, navigation]);
 
   const set = sets.find((s) => s.id === setId);
   const items = setId ? collection.filter((i) => i.setIds?.includes(setId)) : [];
@@ -33,6 +58,31 @@ export default function SetDetailScreen() {
     );
   }
 
+  const exitSelectionMode = useCallback(() => {
+    setIsSelecting(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleSelectItem = useCallback((itemId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((i) => i.id)));
+    }
+  }, [selectedIds.size, items]);
+
   const handleBack = () => {
     triggerButtonPress();
     router.navigate({
@@ -42,6 +92,10 @@ export default function SetDetailScreen() {
   };
 
   const handleItemPress = (item: AnalysisResult) => {
+    if (isSelecting) {
+      toggleSelectItem(item.id);
+      return;
+    }
     router.push({
       pathname: '/(tabs)/(scanner)/result',
       params: { resultData: JSON.stringify(item), source: `setdetail:${setId}` },
@@ -92,55 +146,175 @@ export default function SetDetailScreen() {
     );
   };
 
-  const handleIdentify = () => {
+  const handleBulkRemoveFromSet = () => {
+    if (selectedIds.size === 0) return;
     triggerButtonPress();
-    router.navigate('/(tabs)/(scanner)');
+    Alert.alert(
+      'Remove from Set',
+      `Remove ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} from "${set.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          onPress: () => {
+            for (const id of selectedIds) {
+              removeItemFromSet(id, set.id);
+            }
+            exitSelectionMode();
+          },
+        },
+      ]
+    );
   };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    triggerButtonPress();
+    Alert.alert(
+      'Delete Items',
+      `Remove ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} from your collection?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            for (const id of selectedIds) {
+              removeFromCollection(id);
+            }
+            exitSelectionMode();
+          },
+        },
+      ]
+    );
+  };
+
+  const runBulkExport = async (exportFn: (items: AnalysisResult[]) => Promise<void | string>) => {
+    setIsExporting(true);
+    try {
+      const selected = items.filter((i) => selectedIds.has(i.id));
+      await exportFn(selected);
+    } catch {
+      Alert.alert('Export Failed', 'Unable to export. Please try again.', [{ text: 'OK' }]);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleBulkExport = () => {
+    if (selectedIds.size === 0) return;
+    triggerButtonPress();
+    Alert.alert(
+      'Export Format',
+      `Export ${selectedIds.size} ${selectedIds.size === 1 ? 'record' : 'records'} as:`,
+      [
+        { text: 'PDF', onPress: () => runBulkExport(exportCollectionToPDF) },
+        { text: 'JSON', onPress: () => runBulkExport(exportCollectionAsJSON) },
+        { text: 'Images (ZIP)', onPress: () => runBulkExport(exportImageAssetsZip) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const allSelected = items.length > 0 && selectedIds.size === items.length;
 
   return (
     <View style={styles.container}>
       <SafeAreaView edges={['top']} style={styles.headerSafe}>
         <View style={styles.headerBar}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={24} color={colors.white} />
-          </TouchableOpacity>
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{set.name}</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              triggerButtonPress();
-              setShowAddModal(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add" size={26} color={colors.white} />
-          </TouchableOpacity>
+          {isSelecting ? (
+            <>
+              <TouchableOpacity onPress={exitSelectionMode} activeOpacity={0.7} style={styles.headerTextButton}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={styles.headerTitleWrap}>
+                <Text style={styles.headerTitle}>{selectedIds.size} Selected</Text>
+              </View>
+              <TouchableOpacity onPress={handleSelectAll} activeOpacity={0.7} style={styles.headerTextButton}>
+                <Text style={styles.selectAllText}>{allSelected ? 'Deselect' : 'All'}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
+                <Ionicons name="chevron-back" size={24} color={colors.white} />
+              </TouchableOpacity>
+              <View style={styles.headerTitleWrap}>
+                <Text style={styles.headerTitle} numberOfLines={1}>{set.name}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => {
+                  triggerButtonPress();
+                  setShowAddModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={26} color={colors.white} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </SafeAreaView>
 
-      {/* Stats row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Ionicons name="albums" size={16} color={colors.accentPrimary} />
-          <Text style={styles.statText}>{items.length} {items.length === 1 ? 'record' : 'records'}</Text>
+      {/* Stats row + Select button */}
+      {!isSelecting && (
+        <View style={styles.statsRow}>
+          <View style={styles.statsLeft}>
+            <View style={styles.statItem}>
+              <Ionicons name="albums" size={16} color={colors.accentPrimary} />
+              <Text style={styles.statText}>{items.length} {items.length === 1 ? 'record' : 'records'}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="globe" size={16} color={colors.accentPrimary} />
+              <Text style={styles.statText}>{originCount} {originCount === 1 ? 'origin' : 'origins'}</Text>
+            </View>
+          </View>
+          {items.length > 0 && (
+            <TouchableOpacity
+              style={styles.selectButton}
+              activeOpacity={0.7}
+              onPress={() => {
+                triggerButtonPress();
+                setIsSelecting(true);
+              }}
+            >
+              <Ionicons name="checkmark-circle-outline" size={18} color={colors.textSecondary} />
+              <Text style={styles.selectButtonText}>Select</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <View style={styles.statItem}>
-          <Ionicons name="globe" size={16} color={colors.accentPrimary} />
-          <Text style={styles.statText}>{originCount} {originCount === 1 ? 'origin' : 'origins'}</Text>
-        </View>
-      </View>
+      )}
 
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <CollectionCard
-            item={item}
-            onPress={() => handleItemPress(item)}
-            onKebabPress={() => handleItemKebab(item)}
-          />
+          <View style={styles.selectableRow}>
+            {isSelecting && (
+              <TouchableOpacity
+                style={styles.bulkCheckboxWrap}
+                onPress={() => toggleSelectItem(item.id)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.bulkCheckbox, selectedIds.has(item.id) && styles.bulkCheckboxActive]}>
+                  {selectedIds.has(item.id) && <Ionicons name="checkmark" size={16} color={colors.white} />}
+                </View>
+              </TouchableOpacity>
+            )}
+            <View style={styles.selectableCardWrap}>
+              <CollectionCard
+                item={item}
+                onPress={() => handleItemPress(item)}
+                onKebabPress={isSelecting ? undefined : () => handleItemKebab(item)}
+                onLongPress={!isSelecting ? () => {
+                  triggerButtonPress();
+                  setIsSelecting(true);
+                  setSelectedIds(new Set([item.id]));
+                } : undefined}
+              />
+            </View>
+          </View>
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -153,10 +327,35 @@ export default function SetDetailScreen() {
         }
       />
 
-      {/* Bottom CTA */}
-      <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
-        <GradientButton text="Identify" onPress={handleIdentify} icon="camera" />
-      </SafeAreaView>
+      {/* Bulk action bar (only visible in selection mode) */}
+      {isSelecting && (
+        <SafeAreaView edges={['bottom']} style={styles.bulkActionBar}>
+          <TouchableOpacity style={styles.bulkAction} onPress={handleBulkRemoveFromSet} activeOpacity={0.7}>
+            <Ionicons name="remove-circle-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.bulkActionText}>Remove</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bulkAction} onPress={handleBulkDelete} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={22} color={colors.error} />
+            <Text style={[styles.bulkActionText, { color: colors.error }]}>Delete</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.bulkAction}
+            onPress={() => {
+              if (selectedIds.size === 0) return;
+              triggerButtonPress();
+              setShowBulkMove(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="cube-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.bulkActionText}>Move</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bulkAction} onPress={handleBulkExport} activeOpacity={0.7}>
+            <Ionicons name="download-outline" size={22} color={colors.textPrimary} />
+            <Text style={styles.bulkActionText}>Export</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
 
       {/* Add Records Modal */}
       {setId && (
@@ -165,6 +364,24 @@ export default function SetDetailScreen() {
           setId={setId}
           onClose={() => setShowAddModal(false)}
         />
+      )}
+
+      {/* Bulk Move Modal */}
+      <BulkMoveModal
+        visible={showBulkMove}
+        itemIds={Array.from(selectedIds)}
+        onDone={() => {
+          setShowBulkMove(false);
+          exitSelectionMode();
+        }}
+        onClose={() => setShowBulkMove(false)}
+      />
+
+      {/* Export loading overlay */}
+      {isExporting && (
+        <View style={styles.exportOverlay}>
+          <ActivityIndicator size="large" color={colors.accentPrimary} />
+        </View>
       )}
     </View>
   );
@@ -191,6 +408,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTextButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  selectAllText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.accentPrimary,
+  },
   headerTitleWrap: {
     flex: 1,
     alignItems: 'center',
@@ -202,11 +433,16 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
+  },
+  statsLeft: {
+    flexDirection: 'row',
+    gap: spacing.lg,
   },
   statItem: {
     flexDirection: 'row',
@@ -218,11 +454,48 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary,
   },
+  selectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.round,
+  },
+  selectButtonText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
   listContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
     flexGrow: 1,
+  },
+  selectableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectableCardWrap: {
+    flex: 1,
+  },
+  bulkCheckboxWrap: {
+    paddingRight: spacing.sm,
+    justifyContent: 'center',
+  },
+  bulkCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkCheckboxActive: {
+    backgroundColor: colors.accentPrimary,
+    borderColor: colors.accentPrimary,
   },
   emptyState: {
     flex: 1,
@@ -242,12 +515,31 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
   },
-  bottomBar: {
-    paddingHorizontal: spacing.xl,
+  bulkActionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.background,
+  },
+  bulkAction: {
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+  },
+  bulkActionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textPrimary,
+  },
+  exportOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorText: {
     fontSize: 16,

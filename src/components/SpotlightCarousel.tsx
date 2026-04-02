@@ -94,9 +94,9 @@ export function SpotlightCarousel({ items, onItemPress }: Props) {
             <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
 
             {/* Large centered item image */}
-            {item.imageUri ? (
+            {(item.imageUri || item.discogsImage || item.discogsThumbnail) ? (
               <Image
-                source={{ uri: item.imageUri }}
+                source={{ uri: item.imageUri || item.discogsImage || item.discogsThumbnail }}
                 style={styles.image}
                 contentFit="contain"
               />

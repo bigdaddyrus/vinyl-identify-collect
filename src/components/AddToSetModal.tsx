@@ -156,8 +156,8 @@ export function AddToSetModal({ visible, setId, onClose }: Props) {
                   </View>
 
                   {/* Image */}
-                  {item.imageUri ? (
-                    <Image source={{ uri: item.imageUri }} style={styles.itemImage} contentFit="cover" />
+                  {(item.imageUri || item.discogsImage || item.discogsThumbnail) ? (
+                    <Image source={{ uri: item.discogsThumbnail || item.imageUri || item.discogsImage }} style={styles.itemImage} contentFit="cover" />
                   ) : (
                     <View style={styles.itemImagePlaceholder}>
                       <Ionicons name="image" size={20} color={colors.border} />

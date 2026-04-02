@@ -11,6 +11,7 @@ import { WorldMapPreview } from '@/components/WorldMapPreview';
 import { PillTabSwitcher } from '@/components/PillTabSwitcher';
 import { GoldenGlow } from '@/components/GoldenGlow';
 import { BulkMoveModal } from '@/components/BulkMoveModal';
+import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import * as ImagePicker from 'expo-image-picker';
@@ -51,6 +52,7 @@ export default function PortfolioScreen() {
   const deleteSet = useAppStore((state) => state.deleteSet);
   const getItemsInSet = useAppStore((state) => state.getItemsInSet);
   const getSetValue = useAppStore((state) => state.getSetValue);
+  const addItemsToSet = useAppStore((state) => state.addItemsToSet);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState(tab ?? appConfig.collection.tabs[0].key);
 
@@ -69,9 +71,10 @@ export default function PortfolioScreen() {
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [isBackpopulating, setIsBackpopulating] = useState(false);
   const [backpopProgress, setBackpopProgress] = useState<BackpopulateProgress | null>(null);
+  const [setPickerItem, setSetPickerItem] = useState<AnalysisResult | null>(null);
 
   useLayoutEffect(() => {
-    navigation.getParent()?.setOptions({
+    navigation.setOptions({
       tabBarStyle: isSelecting
         ? { display: 'none' as const }
         : DEFAULT_TAB_BAR_STYLE,
@@ -325,6 +328,8 @@ export default function PortfolioScreen() {
           onPress={handleExportCollection}
           disabled={isExporting}
           activeOpacity={0.7}
+          accessibilityLabel="Export collection as PDF"
+          accessibilityRole="button"
         >
           {isExporting ? (
             <ActivityIndicator color={colors.accentPrimary} />
@@ -390,6 +395,9 @@ export default function PortfolioScreen() {
                   style={styles.sortButton}
                   activeOpacity={0.7}
                   onPress={() => setShowSortMenu(true)}
+                  accessibilityLabel={`Sort by ${sortBy}`}
+                  accessibilityRole="button"
+                  accessibilityHint="Opens sort options"
                 >
                   <Ionicons name="funnel-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.sortText}>{sortBy}</Text>
@@ -465,7 +473,8 @@ export default function PortfolioScreen() {
   const renderSetCard = (setItem: CollectionSet) => {
     const items = getItemsInSet(setItem.id);
     const value = getSetValue(setItem.id);
-    const coverUri = items[0]?.imageUri;
+    const firstItem = items[0];
+    const coverUri = firstItem?.imageUri || firstItem?.discogsImage || firstItem?.discogsThumbnail;
     const updatedDate = new Date(setItem.updatedAt).toLocaleDateString();
 
     return (
@@ -668,16 +677,8 @@ export default function PortfolioScreen() {
           },
         },
         {
-          text: item.barcode ? 'Update Barcode' : 'Add Barcode',
-          onPress: () => handleItemAddBarcode(item),
-        },
-        {
-          text: 'Add / Replace Photos',
-          onPress: () => handleItemManagePhotos(item),
-        },
-        {
-          text: 'Re-analyze',
-          onPress: () => handleItemReanalyze(item),
+          text: 'Add to Set',
+          onPress: () => setSetPickerItem(item),
         },
         {
           text: 'Delete',
@@ -750,6 +751,8 @@ export default function PortfolioScreen() {
                   style={styles.pageKebab}
                   onPress={() => setShowPageMenu(true)}
                   activeOpacity={0.7}
+                  accessibilityLabel="Collection options"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
                 </TouchableOpacity>
@@ -924,6 +927,19 @@ export default function PortfolioScreen() {
         }}
         onClose={() => setShowBulkMove(false)}
       />
+
+      {/* Set Picker Modal (single item from kebab) */}
+      {setPickerItem && (
+        <SetPickerModal
+          visible={!!setPickerItem}
+          selectedSetIds={setPickerItem.setIds ?? []}
+          onDone={(setIds) => {
+            addItemsToSet(setPickerItem.id, setIds);
+            setSetPickerItem(null);
+          }}
+          onClose={() => setSetPickerItem(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }

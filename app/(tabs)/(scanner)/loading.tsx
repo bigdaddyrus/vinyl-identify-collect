@@ -14,32 +14,11 @@ import { LoadingStepItem } from '@/components/LoadingStepItem';
 import { appConfig } from '@/config/appConfig';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerPriceReveal } from '@/utils/haptics';
-import { getRandomMockResult } from '@/mock/analysisData';
 import { analyzeImages } from '@/services/geminiVision';
 import { searchByBarcode, searchByQuery } from '@/services/discogs';
 import type { DiscogsResult } from '@/services/discogs';
 import { buildDiscogsUpdates } from '@/utils/mergeDiscogs';
 
-/** Merge Discogs enrichment fields into an AnalysisResult (used for mock/fallback paths) */
-function mergeDiscogsData(result: AnalysisResult, discogs: DiscogsResult | null): void {
-  if (!discogs) return;
-  if (discogs.thumbnail) result.discogsThumbnail = discogs.thumbnail;
-  if (discogs.primaryImage) result.discogsImage = discogs.primaryImage;
-  if (discogs.discogsImages.length > 0) result.discogsImages = discogs.discogsImages;
-  if (discogs.styles.length > 0) result.styles = discogs.styles;
-  if (discogs.weight) result.weight = discogs.weight;
-  if (discogs.tracklist.length > 0) result.discogsTracklist = discogs.tracklist;
-  if (discogs.companies.length > 0) result.companies = discogs.companies;
-  if (discogs.extraArtists.length > 0) result.extraArtists = discogs.extraArtists;
-  if (discogs.discogsUrl) result.discogsUrl = discogs.discogsUrl;
-  if (discogs.discogsId) result.discogsId = discogs.discogsId;
-  if (discogs.lowestPrice != null) result.lowestPrice = discogs.lowestPrice;
-  if (discogs.numForSale != null) result.numForSale = discogs.numForSale;
-  if (discogs.community) {
-    result.communityHave = discogs.community.have;
-    result.communityWant = discogs.community.want;
-  }
-}
 import { useAppStore } from '@/store/useAppStore';
 import { useScanCart } from '@/context/ScanCartContext';
 import { AnalysisResult, CapturedImage } from '@/types';
@@ -106,6 +85,7 @@ export default function LoadingScreen() {
   const [error, setError] = useState<string | null>(null);
   const apiResultRef = useRef<AnalysisResult | null>(null);
   const navigatedRef = useRef(false);
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Progress bar animation
   const progressWidth = useSharedValue(0);
@@ -120,8 +100,11 @@ export default function LoadingScreen() {
   }, [incrementScanCount, isReanalyze]);
 
   const goToResult = useCallback((result: AnalysisResult) => {
-    // Fill progress to 100%
-    progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.cubic) });
+    // Cancel any running step timer so it can't regress the progress bar
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = null;
+    }
     triggerPriceReveal();
 
     // Re-analyze mode: update the existing item in store and navigate back
@@ -254,19 +237,23 @@ export default function LoadingScreen() {
   useEffect(() => {
     if (error) return;
 
-    const stepDuration = 1000;
+    const stepDuration = 1800;
     const totalSteps = steps.length;
     // Reserve the last ~15% of the bar for when the API actually finishes
     const maxProgressBeforeApi = 85;
     let stepIdx = 0;
-    let stepTimer: ReturnType<typeof setTimeout>;
 
     const advanceStep = () => {
       stepIdx++;
 
-      if (stepIdx >= totalSteps) {
-        // All steps visited — signal completion so navigation guard passes.
-        setCurrentStepIndex(totalSteps);
+      if (stepIdx >= totalSteps - 1) {
+        // Reached the last step — keep it as "active" (spinning) until API finishes
+        setCurrentStepIndex(totalSteps - 1);
+        progressWidth.value = withTiming(maxProgressBeforeApi, {
+          duration: stepDuration * 0.8,
+          easing: Easing.out(Easing.cubic),
+        });
+        stepTimerRef.current = null;
         return;
       }
 
@@ -277,7 +264,7 @@ export default function LoadingScreen() {
         duration: stepDuration * 0.8,
         easing: Easing.out(Easing.cubic),
       });
-      stepTimer = setTimeout(advanceStep, stepDuration);
+      stepTimerRef.current = setTimeout(advanceStep, stepDuration);
     };
 
     // Kick off first progress bump
@@ -285,7 +272,7 @@ export default function LoadingScreen() {
       duration: stepDuration * 0.8,
       easing: Easing.out(Easing.cubic),
     });
-    stepTimer = setTimeout(advanceStep, stepDuration);
+    stepTimerRef.current = setTimeout(advanceStep, stepDuration);
 
     // API call
     const runAnalysis = async () => {
@@ -320,38 +307,12 @@ export default function LoadingScreen() {
         }
 
         if (parsedCart.length > 0) {
-          try {
-            result = await analyzeImages(parsedCart, discogsData, effectiveBarcode);
-          } catch (apiError) {
-            const message = apiError instanceof Error ? apiError.message : '';
-            if (message.includes('API key not configured')) {
-              result = getRandomMockResult();
-              result.imageUri = imageUri;
-              result.images = parsedCart.map((img) => img.uri);
-              if (effectiveBarcode) result.barcode = effectiveBarcode;
-              mergeDiscogsData(result, discogsData);
-            } else {
-              throw apiError;
-            }
-          }
-        } else if (effectiveBarcode && discogsData) {
-          // Barcode-only path: send Discogs data to Gemini without images
-          try {
-            result = await analyzeImages([], discogsData, effectiveBarcode);
-          } catch (apiError) {
-            const message = apiError instanceof Error ? apiError.message : '';
-            if (message.includes('API key not configured')) {
-              result = getRandomMockResult();
-              if (effectiveBarcode) result.barcode = effectiveBarcode;
-              mergeDiscogsData(result, discogsData);
-            } else {
-              throw apiError;
-            }
-          }
+          result = await analyzeImages(parsedCart, discogsData, effectiveBarcode);
+        } else if (discogsData) {
+          // No images but have Discogs data (from barcode or name search) — send to Gemini
+          result = await analyzeImages([], discogsData, effectiveBarcode);
         } else {
-          result = getRandomMockResult();
-          if (effectiveBarcode) result.barcode = effectiveBarcode;
-          mergeDiscogsData(result, discogsData);
+          throw new Error('Unable to analyze — no photos or barcode data found. Please go back, add a clear photo or scan the barcode, and try again.');
         }
 
         // For re-analyze, merge Discogs enrichment into the result
@@ -364,24 +325,51 @@ export default function LoadingScreen() {
         setApiDone(true);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+
+        // Re-analyze failure: alert and go back — original item stays intact
+        if (isReanalyze) {
+          if (stepTimerRef.current) {
+            clearTimeout(stepTimerRef.current);
+            stepTimerRef.current = null;
+          }
+          Alert.alert(
+            'Re-analysis Failed',
+            message,
+            [{ text: 'OK', onPress: () => router.back() }],
+          );
+          return;
+        }
+
         setError(message);
       }
     };
 
     runAnalysis();
 
-    return () => clearTimeout(stepTimer);
+    return () => {
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+    };
   }, [error, imageUri, steps.length, progressWidth, parsedCart, effectiveBarcode, isReanalyze, reanalyzeItem]);
 
-  // When API finishes and the step sequence has completed, navigate to the result
+  // When API finishes and steps have reached the last step, mark it complete then navigate
   useEffect(() => {
-    if (!apiDone || !apiResultRef.current || currentStepIndex < steps.length) return;
-    // Small delay so the user sees the final checkmark pop
+    if (!apiDone || !apiResultRef.current) return;
+    // Still advancing through earlier steps — wait
+    if (currentStepIndex < steps.length - 1) return;
+
+    if (currentStepIndex === steps.length - 1) {
+      // Mark the last step as complete (will re-trigger this effect)
+      setCurrentStepIndex(steps.length);
+      return;
+    }
+
+    // All steps visually complete — animate progress to 100% and navigate
+    progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.cubic) });
     const timer = setTimeout(() => {
       navigateToResult(apiResultRef.current!);
-    }, 400);
+    }, 500);
     return () => clearTimeout(timer);
-  }, [apiDone, currentStepIndex, steps.length, navigateToResult]);
+  }, [apiDone, currentStepIndex, steps.length, navigateToResult, progressWidth]);
 
   const handleRetry = () => {
     setError(null);
@@ -428,7 +416,7 @@ export default function LoadingScreen() {
   const getStepStatus = (index: number): StepStatus => {
     if (index < currentStepIndex) return 'complete';
     if (index === currentStepIndex && currentStepIndex < steps.length) return 'active';
-    if (currentStepIndex >= steps.length) return 'complete'; // all done
+    if (currentStepIndex >= steps.length && apiDone) return 'complete';
     return 'pending';
   };
 
