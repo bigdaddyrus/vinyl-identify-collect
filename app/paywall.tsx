@@ -46,8 +46,10 @@ export default function PaywallScreen() {
         throw new Error('No offerings available');
       }
 
-      // Select package based on toggle or plan selection
-      const packageId = selectedToggle === 0 ? 'annual' : 'monthly';
+      // Select package based on active UI variant
+      const packageId = paywall.pricingCardStyle === 'toggle'
+        ? (selectedToggle === 0 ? 'annual' : 'monthly')
+        : (selectedPlan === 'annual' ? 'annual' : 'weekly');
       const selectedPackage =
         currentOffering.availablePackages.find((p) => p.identifier === packageId) ??
         currentOffering.availablePackages[0];
@@ -59,8 +61,16 @@ export default function PaywallScreen() {
       const { customerInfo } = await Purchases.purchasePackage(selectedPackage);
       const isPremium = customerInfo.entitlements.active['premium'] !== undefined;
       setPremium(isPremium);
-      seePaywall();
 
+      if (!isPremium) {
+        Alert.alert(
+          'Purchase Processing',
+          'Your purchase was received but the subscription is still being activated. Please try restoring purchases in a moment.',
+        );
+        return;
+      }
+
+      seePaywall();
       if (isModal) {
         router.back();
       } else {
@@ -120,11 +130,28 @@ export default function PaywallScreen() {
     }
   };
 
-  const disclaimerText =
-    `${paywall.trialDays}-day free trial, then ${paywall.yearlyPrice}/year. ` +
-    'Subscription automatically renews until canceled. ' +
-    'Payment will be charged to your Apple ID account at confirmation of purchase. ' +
-    'Cancel anytime in Settings > Subscriptions.';
+  const getDisclaimerText = () => {
+    let price: string;
+    let period: string;
+    if (paywall.pricingCardStyle === 'toggle') {
+      price = selectedToggle === 0 ? paywall.yearlyPrice : (paywall.monthlyPrice ?? paywall.weeklyPrice);
+      period = selectedToggle === 0 ? 'year' : 'month';
+    } else {
+      price = selectedPlan === 'annual' ? paywall.yearlyPrice : paywall.weeklyPrice;
+      period = selectedPlan === 'annual' ? 'year' : 'week';
+    }
+    const hasTrialForSelection = paywall.pricingCardStyle === 'toggle' ? selectedToggle === 0 : true;
+    const trialPart = hasTrialForSelection && paywall.trialDays
+      ? `${paywall.trialDays}-day free trial, then ${price}/${period}. `
+      : `${price}/${period}. `;
+    return (
+      trialPart +
+      'Subscription automatically renews until canceled. ' +
+      'Payment will be charged to your Apple ID account at confirmation of purchase. ' +
+      'Cancel anytime in Settings > Subscriptions.'
+    );
+  };
+  const disclaimerText = getDisclaimerText();
 
   // Toggle-style paywall (primary design)
   if (paywall.pricingCardStyle === 'toggle') {

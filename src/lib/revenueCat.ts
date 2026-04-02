@@ -14,6 +14,11 @@ export async function initRevenueCat(): Promise<void> {
   if (!apiKey) {
     if (__DEV__) {
       console.log('[RevenueCat] No API key configured — skipping init');
+    } else {
+      console.error(
+        `[RevenueCat] Missing API key for platform "${Platform.OS}". ` +
+          'In-app purchases will not work. Check environment configuration.'
+      );
     }
     return;
   }

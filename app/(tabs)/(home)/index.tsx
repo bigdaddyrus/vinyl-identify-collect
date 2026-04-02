@@ -65,7 +65,7 @@ export default function HomeScreen() {
 
   // Shuffle collection items for the stacked display using Fisher-Yates
   const stackImages = useMemo(() => {
-    const withImages = collection.filter((item) => item.imageUri);
+    const withImages = collection.filter((item) => item.imageUri || item.discogsImage || item.discogsThumbnail);
     const shuffled = [...withImages];
     // Seeded shuffle so it's stable during the same mount
     let seed = shuffleSeed;
@@ -153,7 +153,7 @@ export default function HomeScreen() {
                     ]}
                   >
                     <Image
-                      source={{ uri: item.imageUri }}
+                      source={{ uri: item.imageUri || item.discogsImage || item.discogsThumbnail }}
                       style={styles.stackImage}
                       contentFit="cover"
                     />

@@ -74,7 +74,7 @@ export default function PortfolioScreen() {
   const [setPickerItem, setSetPickerItem] = useState<AnalysisResult | null>(null);
 
   useLayoutEffect(() => {
-    navigation.getParent()?.setOptions({
+    navigation.setOptions({
       tabBarStyle: isSelecting
         ? { display: 'none' as const }
         : DEFAULT_TAB_BAR_STYLE,
@@ -473,7 +473,8 @@ export default function PortfolioScreen() {
   const renderSetCard = (setItem: CollectionSet) => {
     const items = getItemsInSet(setItem.id);
     const value = getSetValue(setItem.id);
-    const coverUri = items[0]?.imageUri;
+    const firstItem = items[0];
+    const coverUri = firstItem?.imageUri || firstItem?.discogsImage || firstItem?.discogsThumbnail;
     const updatedDate = new Date(setItem.updatedAt).toLocaleDateString();
 
     return (

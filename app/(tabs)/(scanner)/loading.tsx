@@ -312,7 +312,7 @@ export default function LoadingScreen() {
           // No images but have Discogs data (from barcode or name search) — send to Gemini
           result = await analyzeImages([], discogsData, effectiveBarcode);
         } else {
-          throw new Error('No images or metadata available for analysis.');
+          throw new Error('Unable to analyze — no photos or barcode data found. Please go back, add a clear photo or scan the barcode, and try again.');
         }
 
         // For re-analyze, merge Discogs enrichment into the result
