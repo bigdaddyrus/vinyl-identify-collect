@@ -298,6 +298,10 @@ export interface AppConfig {
   result: ResultConfig;
   collection: CollectionConfig;
   portfolio?: PortfolioConfig; // Deprecated, for backwards compatibility
+  legal: {
+    privacyPolicyUrl: string;
+    termsUrl: string;
+  };
   ai: AiConfig;
   aso: AsoConfig;
 }

@@ -325,6 +325,8 @@ export default function PortfolioScreen() {
           onPress={handleExportCollection}
           disabled={isExporting}
           activeOpacity={0.7}
+          accessibilityLabel="Export collection as PDF"
+          accessibilityRole="button"
         >
           {isExporting ? (
             <ActivityIndicator color={colors.accentPrimary} />
@@ -390,6 +392,9 @@ export default function PortfolioScreen() {
                   style={styles.sortButton}
                   activeOpacity={0.7}
                   onPress={() => setShowSortMenu(true)}
+                  accessibilityLabel={`Sort by ${sortBy}`}
+                  accessibilityRole="button"
+                  accessibilityHint="Opens sort options"
                 >
                   <Ionicons name="funnel-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.sortText}>{sortBy}</Text>
@@ -750,6 +755,8 @@ export default function PortfolioScreen() {
                   style={styles.pageKebab}
                   onPress={() => setShowPageMenu(true)}
                   activeOpacity={0.7}
+                  accessibilityLabel="Collection options"
+                  accessibilityRole="button"
                 >
                   <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
                 </TouchableOpacity>

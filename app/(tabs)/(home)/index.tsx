@@ -135,6 +135,8 @@ export default function HomeScreen() {
                 style={styles.stackContainer}
                 onPress={() => router.push('/(tabs)/portfolio')}
                 activeOpacity={0.8}
+                accessibilityLabel="View collection"
+                accessibilityRole="button"
               >
                 {stackImages.map((item, index) => (
                   <View
@@ -184,7 +186,7 @@ export default function HomeScreen() {
         {/* Export Data */}
         {!isEmpty && (
           <View style={styles.exportContainer}>
-            <TouchableOpacity style={styles.exportButton} onPress={handleExportData} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.exportButton} onPress={handleExportData} activeOpacity={0.7} accessibilityLabel="Export data as JSON" accessibilityRole="button">
               <Ionicons name="download-outline" size={18} color={colors.accentPrimary} />
               <Text style={styles.exportButtonText}>
                 {appConfig.collection.exportDataText ?? 'Export Data'}

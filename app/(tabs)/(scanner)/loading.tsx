@@ -106,6 +106,7 @@ export default function LoadingScreen() {
   const [error, setError] = useState<string | null>(null);
   const apiResultRef = useRef<AnalysisResult | null>(null);
   const navigatedRef = useRef(false);
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Progress bar animation
   const progressWidth = useSharedValue(0);
@@ -120,6 +121,11 @@ export default function LoadingScreen() {
   }, [incrementScanCount, isReanalyze]);
 
   const goToResult = useCallback((result: AnalysisResult) => {
+    // Cancel any running step timer so it can't regress the progress bar
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = null;
+    }
     // Fill progress to 100%
     progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.cubic) });
     triggerPriceReveal();
@@ -254,18 +260,18 @@ export default function LoadingScreen() {
   useEffect(() => {
     if (error) return;
 
-    const stepDuration = 1000;
+    const stepDuration = 1200;
     const totalSteps = steps.length;
     // Reserve the last ~15% of the bar for when the API actually finishes
     const maxProgressBeforeApi = 85;
     let stepIdx = 0;
-    let stepTimer: ReturnType<typeof setTimeout>;
 
     const advanceStep = () => {
       stepIdx++;
 
       if (stepIdx >= totalSteps) {
         // All steps visited — signal completion so navigation guard passes.
+        stepTimerRef.current = null;
         setCurrentStepIndex(totalSteps);
         return;
       }
@@ -277,7 +283,7 @@ export default function LoadingScreen() {
         duration: stepDuration * 0.8,
         easing: Easing.out(Easing.cubic),
       });
-      stepTimer = setTimeout(advanceStep, stepDuration);
+      stepTimerRef.current = setTimeout(advanceStep, stepDuration);
     };
 
     // Kick off first progress bump
@@ -285,7 +291,7 @@ export default function LoadingScreen() {
       duration: stepDuration * 0.8,
       easing: Easing.out(Easing.cubic),
     });
-    stepTimer = setTimeout(advanceStep, stepDuration);
+    stepTimerRef.current = setTimeout(advanceStep, stepDuration);
 
     // API call
     const runAnalysis = async () => {
@@ -324,7 +330,7 @@ export default function LoadingScreen() {
             result = await analyzeImages(parsedCart, discogsData, effectiveBarcode);
           } catch (apiError) {
             const message = apiError instanceof Error ? apiError.message : '';
-            if (message.includes('API key not configured')) {
+            if (__DEV__ && message.includes('API key not configured')) {
               result = getRandomMockResult();
               result.imageUri = imageUri;
               result.images = parsedCart.map((img) => img.uri);
@@ -334,13 +340,13 @@ export default function LoadingScreen() {
               throw apiError;
             }
           }
-        } else if (effectiveBarcode && discogsData) {
-          // Barcode-only path: send Discogs data to Gemini without images
+        } else if (discogsData) {
+          // No images but have Discogs data (from barcode or name search) — send to Gemini
           try {
             result = await analyzeImages([], discogsData, effectiveBarcode);
           } catch (apiError) {
             const message = apiError instanceof Error ? apiError.message : '';
-            if (message.includes('API key not configured')) {
+            if (__DEV__ && message.includes('API key not configured')) {
               result = getRandomMockResult();
               if (effectiveBarcode) result.barcode = effectiveBarcode;
               mergeDiscogsData(result, discogsData);
@@ -348,10 +354,12 @@ export default function LoadingScreen() {
               throw apiError;
             }
           }
-        } else {
+        } else if (__DEV__) {
           result = getRandomMockResult();
           if (effectiveBarcode) result.barcode = effectiveBarcode;
           mergeDiscogsData(result, discogsData);
+        } else {
+          throw new Error('No images provided for analysis.');
         }
 
         // For re-analyze, merge Discogs enrichment into the result
@@ -370,7 +378,9 @@ export default function LoadingScreen() {
 
     runAnalysis();
 
-    return () => clearTimeout(stepTimer);
+    return () => {
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+    };
   }, [error, imageUri, steps.length, progressWidth, parsedCart, effectiveBarcode, isReanalyze, reanalyzeItem]);
 
   // When API finishes and the step sequence has completed, navigate to the result

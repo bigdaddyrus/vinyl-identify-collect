@@ -5,14 +5,16 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Switch,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import Purchases from 'react-native-purchases';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { PricingCard } from '@/components/PricingCard';
@@ -26,20 +28,75 @@ const HERO_HEIGHT = SCREEN_HEIGHT * 0.4;
 
 export default function PaywallScreen() {
   const seePaywall = useAppStore((state) => state.seePaywall);
+  const setPremium = useAppStore((state) => state.setPremium);
   const { paywall } = appConfig;
   const params = useLocalSearchParams<{ modal?: string }>();
   const isModal = params.modal === 'true';
   const [selectedPlan, setSelectedPlan] = useState<'weekly' | 'annual'>('annual');
   const [selectedToggle, setSelectedToggle] = useState<0 | 1>(0);
-  const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
-  const handleStartTrial = () => {
+  const handleStartTrial = async () => {
     triggerButtonPress();
-    seePaywall();
-    if (isModal) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/(home)');
+    setIsPurchasing(true);
+    try {
+      const offerings = await Purchases.getOfferings();
+      const currentOffering = offerings.current;
+      if (!currentOffering) {
+        throw new Error('No offerings available');
+      }
+
+      // Select package based on toggle or plan selection
+      const packageId = selectedToggle === 0 ? 'annual' : 'monthly';
+      const selectedPackage =
+        currentOffering.availablePackages.find((p) => p.identifier === packageId) ??
+        currentOffering.availablePackages[0];
+
+      if (!selectedPackage) {
+        throw new Error('No packages available');
+      }
+
+      const { customerInfo } = await Purchases.purchasePackage(selectedPackage);
+      const isPremium = customerInfo.entitlements.active['premium'] !== undefined;
+      setPremium(isPremium);
+      seePaywall();
+
+      if (isModal) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/(home)');
+      }
+    } catch (err: any) {
+      if (err.userCancelled) {
+        // User cancelled — do nothing
+      } else {
+        Alert.alert('Purchase Failed', err.message ?? 'Unable to complete purchase. Please try again.');
+      }
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    triggerButtonPress();
+    try {
+      const customerInfo = await Purchases.restorePurchases();
+      const isPremium = customerInfo.entitlements.active['premium'] !== undefined;
+      setPremium(isPremium);
+
+      if (isPremium) {
+        seePaywall();
+        Alert.alert('Restored', 'Your subscription has been restored.');
+        if (isModal) {
+          router.back();
+        } else {
+          router.replace('/(tabs)/(home)');
+        }
+      } else {
+        Alert.alert('No Purchases Found', 'We could not find any previous purchases associated with your account.');
+      }
+    } catch (err: any) {
+      Alert.alert('Restore Failed', err.message ?? 'Unable to restore purchases. Please try again.');
     }
   };
 
@@ -53,6 +110,22 @@ export default function PaywallScreen() {
     }
   };
 
+  const handleFooterLink = (link: string) => {
+    if (link === 'Restore') {
+      handleRestore();
+    } else if (link.includes('Privacy')) {
+      WebBrowser.openBrowserAsync(appConfig.legal.privacyPolicyUrl);
+    } else if (link.includes('Terms') || link.includes('EULA')) {
+      WebBrowser.openBrowserAsync(appConfig.legal.termsUrl);
+    }
+  };
+
+  const disclaimerText =
+    `${paywall.trialDays}-day free trial, then ${paywall.yearlyPrice}/year. ` +
+    'Subscription automatically renews until canceled. ' +
+    'Payment will be charged to your Apple ID account at confirmation of purchase. ' +
+    'Cancel anytime in Settings > Subscriptions.';
+
   // Toggle-style paywall (primary design)
   if (paywall.pricingCardStyle === 'toggle') {
     return (
@@ -63,6 +136,8 @@ export default function PaywallScreen() {
             style={styles.cancelButton}
             onPress={handleSkip}
             activeOpacity={0.6}
+            accessibilityLabel="Skip subscription"
+            accessibilityRole="button"
           >
             <Text style={styles.cancelText}>{paywall.skipText}</Text>
           </TouchableOpacity>
@@ -99,7 +174,7 @@ export default function PaywallScreen() {
             {/* Features — gold checkmarks, no background */}
             <View style={styles.features}>
               {paywall.features.map((feature, index) => (
-                <View key={index} style={styles.featureRow}>
+                <View key={index} style={styles.featureRow} accessibilityRole="text">
                   <View style={styles.goldCheck}>
                     <Ionicons name="checkmark" size={12} color="#050505" />
                   </View>
@@ -124,28 +199,25 @@ export default function PaywallScreen() {
             {/* Price subtext */}
             <Text style={styles.priceSubtext}>{paywall.yearlyPriceSubtext}</Text>
               <GradientButton
-                text="Continue"
+                text={isPurchasing ? 'Processing...' : 'Continue'}
                 onPress={handleStartTrial}
+                disabled={isPurchasing}
               />
-            {/* Reminder toggle */}
-            {paywall.showReminderToggle && (
-              <View style={styles.reminderRow}>
-                <Text style={styles.reminderText}>{paywall.reminderToggleText}</Text>
-                <Switch
-                  value={reminderEnabled}
-                  onValueChange={setReminderEnabled}
-                  trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#E8A838' }}
-                  thumbColor={colors.white}
-                />
-              </View>
-            )}
+
+            {/* Apple-required fine print */}
+            <Text style={styles.disclaimer}>{disclaimerText}</Text>
 
             {/* Footer links */}
             <View style={styles.footerLinks}>
               {paywall.footerLinks.map((link, index) => (
                 <View key={index} style={styles.footerLinkWrapper}>
                   {index > 0 && <Text style={styles.footerDot}> · </Text>}
-                  <TouchableOpacity activeOpacity={0.6}>
+                  <TouchableOpacity
+                    activeOpacity={0.6}
+                    onPress={() => handleFooterLink(link)}
+                    accessibilityLabel={link}
+                    accessibilityRole="link"
+                  >
                     <Text style={styles.footerLinkText}>{link}</Text>
                   </TouchableOpacity>
                 </View>
@@ -169,6 +241,8 @@ export default function PaywallScreen() {
           style={styles.cancelButton}
           onPress={handleSkip}
           activeOpacity={0.6}
+          accessibilityLabel="Skip subscription"
+          accessibilityRole="button"
         >
           <Text style={styles.cancelText}>{paywall.skipText}</Text>
         </TouchableOpacity>
@@ -216,7 +290,7 @@ export default function PaywallScreen() {
 
           <View style={styles.features}>
             {paywall.features.map((feature, index) => (
-              <View key={index} style={styles.featureRow}>
+              <View key={index} style={styles.featureRow} accessibilityRole="text">
                 <View style={styles.goldCheck}>
                   <Ionicons name="checkmark" size={12} color="#050505" />
                 </View>
@@ -226,11 +300,14 @@ export default function PaywallScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.ctaButton}
+            style={[styles.ctaButton, isPurchasing && styles.ctaButtonDisabled]}
             onPress={handleStartTrial}
             activeOpacity={0.85}
+            disabled={isPurchasing}
+            accessibilityLabel={isPurchasing ? 'Processing purchase' : 'Start free trial'}
+            accessibilityRole="button"
           >
-            <Text style={styles.ctaText}>{ctaText}</Text>
+            <Text style={styles.ctaText}>{isPurchasing ? 'Processing...' : ctaText}</Text>
           </TouchableOpacity>
 
           {paywall.pricingCardStyle === 'cards' && (
@@ -240,10 +317,24 @@ export default function PaywallScreen() {
             </Text>
           )}
 
-          <Text style={styles.disclaimer}>
-            Subscription automatically renews unless canceled at least 24 hours
-            before the end of the current period. Cancel anytime.
-          </Text>
+          <Text style={styles.disclaimer}>{disclaimerText}</Text>
+
+          {/* Footer links */}
+          <View style={styles.footerLinks}>
+            {paywall.footerLinks.map((link, index) => (
+              <View key={index} style={styles.footerLinkWrapper}>
+                {index > 0 && <Text style={styles.footerDot}> · </Text>}
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  onPress={() => handleFooterLink(link)}
+                  accessibilityLabel={link}
+                  accessibilityRole="link"
+                >
+                  <Text style={styles.footerLinkText}>{link}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -366,26 +457,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
+  ctaButtonDisabled: {
+    opacity: 0.6,
+  },
   ctaText: {
     fontSize: 17,
     fontWeight: '700',
     color: '#050505',
     letterSpacing: 0.3,
-  },
-
-  // ── Reminder ──
-  reminderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  reminderText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.5)',
-    flex: 1,
-    marginRight: spacing.md,
   },
 
   // ── Footer ──
@@ -408,6 +487,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.3)',
     textDecorationLine: 'underline',
+  },
+
+  // ── Disclaimer ──
+  disclaimer: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.25)',
+    textAlign: 'center',
+    marginTop: spacing.lg,
   },
 
   // ── Fallback styles (cards/inline) ──
@@ -464,11 +551,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.md,
-  },
-  disclaimer: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.25)',
-    textAlign: 'center',
-    marginTop: spacing.lg,
   },
 });

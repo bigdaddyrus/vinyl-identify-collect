@@ -24,7 +24,7 @@ export const appConfig: AppConfig = {
     backgroundImage: require('../../assets/images/splash-bg.png'),
   },
 
-  debugMode: true, // Set false for production
+  debugMode: false,
 
   theme: {
     mode: 'dark',
@@ -100,20 +100,14 @@ export const appConfig: AppConfig = {
     ],
     stats: {
       show: true,
-      ratingNumber: '4.7',
-      ratingCount: '150,000+ 5-Star Ratings',
-      accuracyNumber: '99%',
-      accuracyLabel: 'Accuracy',
-      users: '500K+ Collectors',
+      ratingNumber: '',
+      ratingCount: 'Identify & Value Records',
+      accuracyNumber: '',
+      accuracyLabel: 'AI-Powered Analysis',
+      users: 'Growing Community',
     },
     backgroundImage: require('../../assets/images/splash-bg.png'),
-    testimonials: [
-      { name: 'Marcus T.', stars: 5, text: 'Found a first pressing of Dark Side of the Moon worth $1,200. This app is unreal!' },
-      { name: 'Lisa R.', stars: 5, text: 'Best app for vinyl collectors. Identified my entire crate in an afternoon.' },
-      { name: 'Jake P.', stars: 5, text: 'Discovered my dad\'s old Beatles collection was worth over $8,000. Mind blown!' },
-      { name: 'Sarah K.', stars: 5, text: 'The Discogs-level detail in seconds. Every record collector needs this.' },
-      { name: 'Chris W.', stars: 5, text: 'Portfolio tracking alone justifies the price. Love watching my collection grow!' },
-    ],
+    testimonials: [],
     badgeLabel: 'Essential Reference Apps',
     tagline: 'Want to know how much\nyour vinyl is worth?',
     ctaText: "Let's Go!",
@@ -135,9 +129,9 @@ export const appConfig: AppConfig = {
       { label: '1 month', sublabel: '$0.99' },
     ],
     yearlyPriceSubtext: 'FREE FOR 7 DAYS. THEN $39.99/YEAR',
-    showReminderToggle: true,
+    showReminderToggle: false,
     reminderToggleText: 'Remind me before the trial ends',
-    footerLinks: ['Terms of Use', 'Privacy Policy', 'Subscription Terms', 'Restore'],
+    footerLinks: ['Terms of Use (EULA)', 'Privacy Policy', 'Restore'],
     features: [
       { text: 'Unlimited vinyl scans', icon: 'camera' },
       { text: 'Detailed pressing & label reports', icon: 'document-text' },
@@ -312,6 +306,10 @@ export const appConfig: AppConfig = {
     },
   },
 
+  // NOTE: API keys referenced via EXPO_PUBLIC_* are bundled client-side.
+  // For production, Gemini and Discogs keys should ideally be proxied through
+  // a backend. Acceptable for MVP as they are rate-limited API keys, not secrets
+  // that grant account-level access.
   ai: {
     provider: 'gemini',
     model: 'gemini-2.5-flash',
@@ -352,6 +350,12 @@ Field notes:
     responseSchema: {
       fields: ['name', 'origin', 'year', 'estimatedValue', 'confidence', 'description'],
     },
+  },
+
+  legal: {
+    // TODO: Host these HTML pages and replace with real URLs before App Store submission
+    privacyPolicyUrl: 'https://vinylcollect.app/privacy-policy',
+    termsUrl: 'https://vinylcollect.app/terms-of-service',
   },
 
   aso: {
