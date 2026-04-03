@@ -19,6 +19,7 @@ import { scanFromURLAsync } from 'expo-camera';
 import { AnalysisResult, CollectionSet } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
 import { backpopulateDiscogs, BackpopulateProgress } from '@/services/backpopulateDiscogs';
@@ -936,6 +937,7 @@ export default function PortfolioScreen() {
           onDone={(setIds) => {
             addItemsToSet(setPickerItem.id, setIds);
             setSetPickerItem(null);
+            showSuccessToast('Set updated');
           }}
           onClose={() => setSetPickerItem(null)}
         />

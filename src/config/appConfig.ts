@@ -355,9 +355,8 @@ Field notes:
   },
 
   legal: {
-    // TODO: Host these HTML pages and replace with real URLs before App Store submission
-    privacyPolicyUrl: 'https://vinylcollect.app/privacy-policy',
-    termsUrl: 'https://vinylcollect.app/terms-of-service',
+    privacyPolicyUrl: 'https://bigdaddyrus.github.io/vinyl-identify-collect/privacy-policy.html',
+    termsUrl: 'https://bigdaddyrus.github.io/vinyl-identify-collect/terms-of-service.html',
   },
 
   aso: {

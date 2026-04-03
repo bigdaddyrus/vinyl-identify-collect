@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { colors, spacing, borderRadius, typography } from '@/theme';
 
 interface Props {
@@ -32,10 +33,12 @@ export function BulkMoveModal({ visible, itemIds, onDone, onClose }: Props) {
   const [newSetName, setNewSetName] = useState('');
 
   const handleSelectSet = (setId: string) => {
+    const targetSet = sets.find((s) => s.id === setId);
     for (const itemId of itemIds) {
       addItemToSet(itemId, setId);
     }
     onDone();
+    showSuccessToast(`Moved to ${targetSet?.name ?? 'set'}`);
   };
 
   const handleCreateSet = () => {

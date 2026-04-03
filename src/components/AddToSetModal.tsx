@@ -12,6 +12,7 @@ import {
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { colors, spacing, borderRadius, typography } from '@/theme';
 
 interface Props {
@@ -78,19 +79,28 @@ export function AddToSetModal({ visible, setId, onClose }: Props) {
   }, [selectedIds, originalIds]);
 
   const handleDone = () => {
+    let added = 0;
+    let removed = 0;
     // Add newly selected items
     for (const id of selectedIds) {
       if (!originalIds.has(id)) {
         addItemToSet(id, setId);
+        added++;
       }
     }
     // Remove deselected items
     for (const id of originalIds) {
       if (!selectedIds.has(id)) {
         removeItemFromSet(id, setId);
+        removed++;
       }
     }
     onClose();
+    if (added > 0) {
+      showSuccessToast(`${added} ${added === 1 ? 'record' : 'records'} added to set`);
+    } else if (removed > 0) {
+      showSuccessToast(`${removed} ${removed === 1 ? 'record' : 'records'} removed from set`);
+    }
   };
 
   const handleCancel = () => {

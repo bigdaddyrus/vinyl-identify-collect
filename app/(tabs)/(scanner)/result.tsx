@@ -34,6 +34,7 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult, ExtendedDetailSection, DiscogsTrackEntry, DiscogsCompanyEntry, DiscogsExtraArtistEntry } from '@/types';
 import { colors, spacing } from '@/theme';
 import { triggerCollectionAdd, triggerButtonPress } from '@/utils/haptics';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { getDisplayName } from '@/data/countryCoordinates';
 import { File } from 'expo-file-system';
 import { searchByBarcode } from '@/services/discogs';
@@ -858,6 +859,7 @@ export default function ResultScreen() {
     }
 
     triggerCollectionAdd();
+    showSuccessToast('Added to collection');
 
     if (
       !hasTriggeredReview &&
