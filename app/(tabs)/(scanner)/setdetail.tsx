@@ -11,6 +11,7 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { normalizeOrigin } from '@/data/countryCoordinates';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
@@ -146,6 +147,7 @@ export default function SetDetailScreen() {
           text: 'Remove from Set',
           onPress: () => {
             removeItemFromSet(item.id, set.id);
+            showSuccessToast('Removed from set');
           },
         },
         {
@@ -160,7 +162,10 @@ export default function SetDetailScreen() {
                 {
                   text: 'Delete',
                   style: 'destructive',
-                  onPress: () => removeFromCollection(item.id),
+                  onPress: () => {
+                    removeFromCollection(item.id);
+                    showSuccessToast('Removed from collection');
+                  },
                 },
               ]
             );
@@ -182,10 +187,12 @@ export default function SetDetailScreen() {
         {
           text: 'Remove',
           onPress: () => {
+            const count = selectedIds.size;
             for (const id of selectedIds) {
               removeItemFromSet(id, set.id);
             }
             exitSelectionMode();
+            showSuccessToast(`Removed ${count} ${count === 1 ? 'record' : 'records'} from set`);
           },
         },
       ]
@@ -204,10 +211,12 @@ export default function SetDetailScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            const count = selectedIds.size;
             for (const id of selectedIds) {
               removeFromCollection(id);
             }
             exitSelectionMode();
+            showSuccessToast(`Deleted ${count} ${count === 1 ? 'record' : 'records'}`);
           },
         },
       ]
@@ -219,6 +228,7 @@ export default function SetDetailScreen() {
     try {
       const selected = items.filter((i) => selectedIds.has(i.id));
       await exportFn(selected);
+      showSuccessToast('Exported successfully');
     } catch {
       Alert.alert('Export Failed', 'Unable to export. Please try again.', [{ text: 'OK' }]);
     } finally {

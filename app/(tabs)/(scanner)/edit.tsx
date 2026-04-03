@@ -21,6 +21,7 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
 import { colors, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { composeDisplayName } from '@/utils/displayName';
 
 const GENRE_OPTIONS = [
@@ -112,6 +113,7 @@ export default function EditScreen() {
       notes: notes.trim() || undefined,
       setIds,
     });
+    showSuccessToast('Changes saved');
     router.back();
   };
 

@@ -152,6 +152,7 @@ export default function PortfolioScreen() {
     setIsExporting(true);
     try {
       await exportCollectionToPDF(collection);
+      showSuccessToast('Exported successfully');
     } catch {
       Alert.alert('Export Failed', 'Unable to export collection. Please try again.', [{ text: 'OK' }]);
     } finally {
@@ -197,10 +198,12 @@ export default function PortfolioScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            const count = selectedIds.size;
             for (const id of selectedIds) {
               removeFromCollection(id);
             }
             exitSelectionMode();
+            showSuccessToast(`Deleted ${count} ${count === 1 ? 'record' : 'records'}`);
           },
         },
       ]
@@ -212,6 +215,7 @@ export default function PortfolioScreen() {
     try {
       const items = collection.filter((i) => selectedIds.has(i.id));
       await exportFn(items);
+      showSuccessToast('Exported successfully');
     } catch {
       Alert.alert('Export Failed', 'Unable to export. Please try again.', [{ text: 'OK' }]);
     } finally {
@@ -461,7 +465,14 @@ export default function PortfolioScreen() {
               `Delete "${s.name}"? Items will stay in your collection.`,
               [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => deleteSet(s.id) },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    deleteSet(s.id);
+                    showSuccessToast('Set deleted');
+                  },
+                },
               ]
             );
           },
@@ -690,7 +701,14 @@ export default function PortfolioScreen() {
               `Remove "${item.name}" from your collection?`,
               [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => removeFromCollection(item.id) },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    removeFromCollection(item.id);
+                    showSuccessToast('Removed from collection');
+                  },
+                },
               ]
             );
           },

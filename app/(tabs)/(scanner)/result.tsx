@@ -888,6 +888,7 @@ export default function ResultScreen() {
           style: 'destructive',
           onPress: () => {
             removeFromCollection(item.id);
+            showSuccessToast('Removed from collection');
             navigateBack();
           },
         },
@@ -926,6 +927,7 @@ export default function ResultScreen() {
     triggerButtonPress();
     if (pendingSave) {
       removeFromCollection(item.id);
+      showSuccessToast('Discarded');
     }
     navigateBack();
   };
@@ -970,6 +972,7 @@ export default function ResultScreen() {
                 style: 'destructive',
                 onPress: () => {
                   removeFromCollection(item.id);
+                  showSuccessToast('Removed from collection');
                   navigateBack();
                 },
               },
