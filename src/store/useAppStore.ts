@@ -269,7 +269,7 @@ export const useAppStore = create<AppStore>()(
         // Migrate legacy items that have name but no artist/albumName
         let migrated = false;
         for (const item of state.collection) {
-          if (!item.artist && item.name) {
+          if (item.artist == null && item.albumName == null && item.name) {
             const parsed = parseDisplayName(item.name);
             item.artist = parsed.artist;
             item.albumName = parsed.albumName;

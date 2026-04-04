@@ -328,10 +328,18 @@ export async function analyzeImages(
 
   // Prefer Discogs artist/title over AI defaults when available
   if (discogsData) {
-    if (result.artist === 'Unknown Artist' && discogsData.artist) {
+    const isUnknownArtist =
+      !result.artist ||
+      result.artist.trim() === '' ||
+      result.artist === 'Unknown Artist';
+    if (isUnknownArtist && discogsData.artist) {
       result.artist = discogsData.artist;
     }
-    if (result.albumName === 'Unknown Album' && discogsData.title) {
+    const isUnknownAlbum =
+      !result.albumName ||
+      result.albumName.trim() === '' ||
+      result.albumName === 'Unknown Album';
+    if (isUnknownAlbum && discogsData.title) {
       result.albumName = discogsData.title;
     }
     result.name = composeDisplayName(result.artist, result.albumName, result.pressingName);
