@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { useAppStoreHydration, useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
 import { initRevenueCat, checkPremiumStatus } from '@/lib/revenueCat';
+import { SuccessToast } from '@/components/SuccessToast';
 
 // Prevent auto-hiding splash screen
 ExpoSplashScreen.preventAutoHideAsync();
@@ -85,6 +86,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
       </Stack>
       <StatusBar style="light" />
+      <SuccessToast />
     </GestureHandlerRootView>
   );
 }

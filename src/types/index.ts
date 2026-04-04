@@ -350,6 +350,9 @@ export interface DiscogsExtraArtistEntry {
 export interface AnalysisResult {
   id: string;
   name: string;
+  artist?: string;       // e.g. "Led Zeppelin"
+  albumName?: string;    // e.g. "Led Zeppelin IV"
+  pressingName?: string; // e.g. "1977 UK Pressing"
   origin: string;
   year: string;
   estimatedValue: number;

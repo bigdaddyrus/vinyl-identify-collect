@@ -7,6 +7,7 @@ import { appConfig } from '@/config/appConfig';
 import { useState, useEffect } from 'react';
 import { getRarityScore } from '@/utils/rarity';
 import { normalizeOrigin, getCoordinates } from '@/data/countryCoordinates';
+import { parseDisplayName } from '@/utils/displayName';
 
 /**
  * Global app state using Zustand with AsyncStorage persistence
@@ -263,6 +264,23 @@ export const useAppStore = create<AppStore>()(
     {
       name: 'vinylcollect-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // Migrate legacy items that have name but no artist/albumName
+        let migrated = false;
+        for (const item of state.collection) {
+          if (item.artist == null && item.albumName == null && item.name) {
+            const parsed = parseDisplayName(item.name);
+            item.artist = parsed.artist;
+            item.albumName = parsed.albumName;
+            item.pressingName = parsed.pressingName || undefined;
+            migrated = true;
+          }
+        }
+        if (migrated) {
+          useAppStore.setState({ collection: [...state.collection] });
+        }
+      },
     }
   )
 );

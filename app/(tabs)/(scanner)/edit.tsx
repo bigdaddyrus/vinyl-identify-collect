@@ -21,6 +21,8 @@ import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
 import { colors, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
+import { showSuccessToast } from '@/components/SuccessToast';
+import { composeDisplayName } from '@/utils/displayName';
 
 const GENRE_OPTIONS = [
   'Blues', 'Rock', 'Pop', 'Jazz', 'Funk', 'Soul', 'Electronic',
@@ -57,7 +59,9 @@ export default function EditScreen() {
 
   const item: AnalysisResult | null = parsedItem;
 
-  const [name, setName] = useState(item?.name ?? '');
+  const [artist, setArtist] = useState(item?.artist ?? '');
+  const [albumName, setAlbumName] = useState(item?.albumName ?? '');
+  const [pressingName, setPressingName] = useState(item?.pressingName ?? '');
   const [year, setYear] = useState(item?.year ?? '');
   const [value, setValue] = useState(item?.estimatedValue?.toString() ?? '');
   const [grade, setGrade] = useState(item?.condition ?? '');
@@ -87,8 +91,18 @@ export default function EditScreen() {
     triggerButtonPress();
     const numericValue = parseFloat(value);
     const parsedDate = parseDate(collectionDateStr);
+    const trimmedArtist = artist.trim();
+    const trimmedAlbum = albumName.trim();
+    const trimmedPressing = pressingName.trim();
     updateCollectionItem(item.id, {
-      name: name.trim() || item.name,
+      artist: trimmedArtist || item.artist,
+      albumName: trimmedAlbum || item.albumName,
+      pressingName: trimmedPressing || undefined,
+      name: composeDisplayName(
+        trimmedArtist || item.artist,
+        trimmedAlbum || item.albumName,
+        trimmedPressing || item.pressingName
+      ),
       year: year.trim() || item.year,
       estimatedValue: isNaN(numericValue) ? item.estimatedValue : numericValue,
       condition: grade || undefined,
@@ -99,6 +113,7 @@ export default function EditScreen() {
       notes: notes.trim() || undefined,
       setIds,
     });
+    showSuccessToast('Changes saved');
     router.back();
   };
 
@@ -135,14 +150,40 @@ export default function EditScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Name */}
+          {/* Artist */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Name</Text>
+            <Text style={styles.fieldLabel}>Artist</Text>
             <TextInput
               style={styles.textInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="Record name"
+              value={artist}
+              onChangeText={setArtist}
+              placeholder="e.g. Led Zeppelin"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Album */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Album</Text>
+            <TextInput
+              style={styles.textInput}
+              value={albumName}
+              onChangeText={setAlbumName}
+              placeholder="e.g. Led Zeppelin IV"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Pressing */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Pressing</Text>
+            <TextInput
+              style={styles.textInput}
+              value={pressingName}
+              onChangeText={setPressingName}
+              placeholder="e.g. 1977 UK Pressing"
               placeholderTextColor={colors.textTertiary}
               returnKeyType="next"
             />

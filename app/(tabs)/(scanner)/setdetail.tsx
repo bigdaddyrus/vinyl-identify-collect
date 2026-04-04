@@ -1,5 +1,5 @@
-import { useState, useCallback, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useState, useCallback, useLayoutEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,9 +7,11 @@ import { CollectionCard } from '@/components/CollectionCard';
 import { AddToSetModal } from '@/components/AddToSetModal';
 import { BulkMoveModal } from '@/components/BulkMoveModal';
 import { useAppStore } from '@/store/useAppStore';
+import { appConfig } from '@/config/appConfig';
 import { AnalysisResult } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
+import { showSuccessToast } from '@/components/SuccessToast';
 import { normalizeOrigin } from '@/data/countryCoordinates';
 import { exportCollectionToPDF } from '@/utils/pdf';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
@@ -35,6 +37,8 @@ export default function SetDetailScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [sortBy, setSortBy] = useState('Recently Collected');
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   // Hide bottom tab bar when in selection mode
   useLayoutEffect(() => {
@@ -50,13 +54,27 @@ export default function SetDetailScreen() {
   const items = setId ? collection.filter((i) => i.setIds?.includes(setId)) : [];
   const originCount = new Set(items.map((item) => normalizeOrigin(item.origin))).size;
 
-  if (!set) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Set not found</Text>
-      </SafeAreaView>
-    );
-  }
+  const sortedItems = useMemo(() => {
+    const list = [...items];
+    switch (sortBy) {
+      case 'Highest Value':
+        return list.sort((a, b) => b.estimatedValue - a.estimatedValue);
+      case 'Lowest Value':
+        return list.sort((a, b) => a.estimatedValue - b.estimatedValue);
+      case 'Newest':
+        return list.sort((a, b) => b.createdAt - a.createdAt);
+      case 'Oldest':
+        return list.sort((a, b) => a.createdAt - b.createdAt);
+      case 'Recently Collected':
+        return list.sort((a, b) => (b.collectionDate ?? b.createdAt) - (a.collectionDate ?? a.createdAt));
+      case 'Earliest Collected':
+        return list.sort((a, b) => (a.collectionDate ?? a.createdAt) - (b.collectionDate ?? b.createdAt));
+      case 'A-Z':
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      default:
+        return list;
+    }
+  }, [items, sortBy]);
 
   const exitSelectionMode = useCallback(() => {
     setIsSelecting(false);
@@ -76,12 +94,20 @@ export default function SetDetailScreen() {
   }, []);
 
   const handleSelectAll = useCallback(() => {
-    if (selectedIds.size === items.length) {
+    if (selectedIds.size === sortedItems.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(items.map((i) => i.id)));
+      setSelectedIds(new Set(sortedItems.map((i) => i.id)));
     }
-  }, [selectedIds.size, items]);
+  }, [selectedIds.size, sortedItems]);
+
+  if (!set) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.errorText}>Set not found</Text>
+      </SafeAreaView>
+    );
+  }
 
   const handleBack = () => {
     triggerButtonPress();
@@ -121,6 +147,7 @@ export default function SetDetailScreen() {
           text: 'Remove from Set',
           onPress: () => {
             removeItemFromSet(item.id, set.id);
+            showSuccessToast('Removed from set');
           },
         },
         {
@@ -135,7 +162,10 @@ export default function SetDetailScreen() {
                 {
                   text: 'Delete',
                   style: 'destructive',
-                  onPress: () => removeFromCollection(item.id),
+                  onPress: () => {
+                    removeFromCollection(item.id);
+                    showSuccessToast('Removed from collection');
+                  },
                 },
               ]
             );
@@ -157,10 +187,12 @@ export default function SetDetailScreen() {
         {
           text: 'Remove',
           onPress: () => {
+            const count = selectedIds.size;
             for (const id of selectedIds) {
               removeItemFromSet(id, set.id);
             }
             exitSelectionMode();
+            showSuccessToast(`Removed ${count} ${count === 1 ? 'record' : 'records'} from set`);
           },
         },
       ]
@@ -179,10 +211,12 @@ export default function SetDetailScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            const count = selectedIds.size;
             for (const id of selectedIds) {
               removeFromCollection(id);
             }
             exitSelectionMode();
+            showSuccessToast(`Deleted ${count} ${count === 1 ? 'record' : 'records'}`);
           },
         },
       ]
@@ -194,6 +228,7 @@ export default function SetDetailScreen() {
     try {
       const selected = items.filter((i) => selectedIds.has(i.id));
       await exportFn(selected);
+      showSuccessToast('Exported successfully');
     } catch {
       Alert.alert('Export Failed', 'Unable to export. Please try again.', [{ text: 'OK' }]);
     } finally {
@@ -216,7 +251,7 @@ export default function SetDetailScreen() {
     );
   };
 
-  const allSelected = items.length > 0 && selectedIds.size === items.length;
+  const allSelected = sortedItems.length > 0 && selectedIds.size === sortedItems.length;
 
   return (
     <View style={styles.container}>
@@ -257,18 +292,34 @@ export default function SetDetailScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Stats row + Select button */}
+      {/* Sort / Stats row + Select button */}
       {!isSelecting && (
         <View style={styles.statsRow}>
           <View style={styles.statsLeft}>
-            <View style={styles.statItem}>
-              <Ionicons name="albums" size={16} color={colors.accentPrimary} />
-              <Text style={styles.statText}>{items.length} {items.length === 1 ? 'record' : 'records'}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="globe" size={16} color={colors.accentPrimary} />
-              <Text style={styles.statText}>{originCount} {originCount === 1 ? 'origin' : 'origins'}</Text>
-            </View>
+            {appConfig.collection.sortOptions && items.length > 0 ? (
+              <TouchableOpacity
+                style={styles.sortButton}
+                activeOpacity={0.7}
+                onPress={() => setShowSortMenu(true)}
+                accessibilityLabel={`Sort by ${sortBy}`}
+                accessibilityRole="button"
+              >
+                <Ionicons name="funnel-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.sortText}>{sortBy}</Text>
+                <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : (
+              <>
+                <View style={styles.statItem}>
+                  <Ionicons name="albums" size={16} color={colors.accentPrimary} />
+                  <Text style={styles.statText}>{items.length} {items.length === 1 ? 'record' : 'records'}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Ionicons name="globe" size={16} color={colors.accentPrimary} />
+                  <Text style={styles.statText}>{originCount} {originCount === 1 ? 'origin' : 'origins'}</Text>
+                </View>
+              </>
+            )}
           </View>
           {items.length > 0 && (
             <TouchableOpacity
@@ -287,7 +338,7 @@ export default function SetDetailScreen() {
       )}
 
       <FlatList
-        data={items}
+        data={sortedItems}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.selectableRow}>
@@ -377,6 +428,44 @@ export default function SetDetailScreen() {
         onClose={() => setShowBulkMove(false)}
       />
 
+      {/* Sort dropdown modal */}
+      <Modal
+        visible={showSortMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortMenu(false)}
+      >
+        <Pressable style={styles.sortOverlay} onPress={() => setShowSortMenu(false)}>
+          <View style={styles.sortDropdown}>
+            <Text style={styles.sortDropdownTitle}>Sort By</Text>
+            {(appConfig.collection.sortOptions ?? []).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.sortOption,
+                  sortBy === option && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortBy(option);
+                  setShowSortMenu(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.sortOptionText,
+                  sortBy === option && styles.sortOptionTextActive,
+                ]}>
+                  {option}
+                </Text>
+                {sortBy === option && (
+                  <Ionicons name="checkmark" size={18} color={colors.accentPrimary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
       {/* Export loading overlay */}
       {isExporting && (
         <View style={styles.exportOverlay}>
@@ -454,6 +543,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textSecondary,
   },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: borderRadius.round,
+  },
+  sortText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
   selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -466,6 +569,46 @@ const styles = StyleSheet.create({
   selectButtonText: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  // Sort dropdown
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  sortDropdown: {
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    overflow: 'hidden',
+  },
+  sortDropdownTitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+  },
+  sortOptionActive: {
+    backgroundColor: colors.accentSurface,
+  },
+  sortOptionText: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  sortOptionTextActive: {
+    color: colors.accentPrimary,
+    fontWeight: '600',
   },
   listContent: {
     paddingHorizontal: spacing.md,

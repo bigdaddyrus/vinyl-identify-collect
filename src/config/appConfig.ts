@@ -315,7 +315,9 @@ export const appConfig: AppConfig = {
     model: 'gemini-2.5-flash',
     systemPrompt: `You are an expert vinyl record appraiser and music historian. Analyze these images of a vinyl record (front cover, back cover, and optional center label). Look for catalog numbers, barcodes, matrix/runout numbers, or label variations to determine the exact pressing. Respond with ONLY valid JSON (no markdown, no code fences, no explanation) matching this exact structure:
 {
-  "name": "Artist — Album Title (with pressing/edition details if identifiable)",
+  "artist": "Artist or band name",
+  "albumName": "Album title",
+  "pressingName": "Pressing/edition details if identifiable (e.g. '1977 UK Pressing', 'Original US Mono'). Empty string if unknown.",
   "origin": "ISO 3166-1 alpha-3 country code of release (e.g. USA, GBR, DEU, FRA, JPN, CHN)",
   "year": "Year of this pressing/release (string)",
   "estimatedValue": 0,
@@ -348,14 +350,13 @@ Field notes:
     maxTokens: 4096,
     temperature: 0.3,
     responseSchema: {
-      fields: ['name', 'origin', 'year', 'estimatedValue', 'confidence', 'description'],
+      fields: ['artist', 'albumName', 'pressingName', 'origin', 'year', 'estimatedValue', 'confidence', 'description'],
     },
   },
 
   legal: {
-    // TODO: Host these HTML pages and replace with real URLs before App Store submission
-    privacyPolicyUrl: 'https://vinylcollect.app/privacy-policy',
-    termsUrl: 'https://vinylcollect.app/terms-of-service',
+    privacyPolicyUrl: 'https://bigdaddyrus.github.io/vinyl-identify-collect/privacy-policy.html',
+    termsUrl: 'https://bigdaddyrus.github.io/vinyl-identify-collect/terms-of-service.html',
   },
 
   aso: {

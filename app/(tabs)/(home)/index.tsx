@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   // ── Stacked item images ──
   stackContainer: {
     width: 160,
-    height: 180,
+    height: 160,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -371,8 +371,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   stackImage: {
-    width: 110,
-    height: 135,
+    width: 115,
+    height: 115,
   },
 
   // ── CTAs ──
