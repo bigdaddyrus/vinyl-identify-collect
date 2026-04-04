@@ -313,7 +313,7 @@ export const appConfig: AppConfig = {
   ai: {
     provider: 'gemini',
     model: 'gemini-2.5-flash',
-    systemPrompt: `You are an expert vinyl record appraiser and music historian. Analyze these images of a vinyl record (front cover, back cover, and optional center label). Look for catalog numbers, barcodes, matrix/runout numbers, or label variations to determine the exact pressing. Respond with ONLY valid JSON (no markdown, no code fences, no explanation) matching this exact structure:
+    systemPrompt: `You are an expert vinyl record appraiser and music historian. Analyze the provided information about a vinyl record. If images are provided (front cover, back cover, and optional center label), look for catalog numbers, barcodes, matrix/runout numbers, or label variations to determine the exact pressing. Respond with ONLY valid JSON (no markdown, no code fences, no explanation) matching this exact structure:
 {
   "artist": "Artist or band name",
   "albumName": "Album title",
@@ -344,9 +344,10 @@ Field notes:
 - confidence: integer 0-100
 - rarity: one of "Very Common", "Common", "Uncommon", "Rare", "Very Rare", "Extremely Rare"
 - genre: one of "Blues", "Rock", "Pop", "Jazz", "Funk", "Soul", "Electronic", "Classical", "Hip Hop", "R&B", "World", "Country", "Folk", "Metal", "Latin", "Reggae", "Non-Music", "Stage & Screen"
-- description: concise, under 400 characters
+- description: concise, under 400 characters. Do NOT mention condition uncertainty or lack of photos - focus on what you can identify.
+- condition: If no images are provided, use "VG+" as default estimate. Only assess actual condition if images of the physical record are visible.
 - extendedDetails: array of 3-5 sections covering Record Details (icon: "disc", items: format, speed, label, catalog number, matrix/runout), Value Analysis (icon: "cash", items: median sale, price trend, pressing premium), Pressing Info (icon: "search", items: pressing plant, country, variant notes, special features), Historical Context (icon: "book", items: chart positions, cultural significance, production notes), Collector Info (icon: "people", items: demand level, completist notes, related releases). Each section should have 3-5 items.
-- If you cannot identify the record or the image is unclear, set confidence to 0 and explain in description`,
+- If you cannot identify the record or the image is unclear, set confidence to 0 and explain in description WITHOUT mentioning lack of photos`,
     maxTokens: 4096,
     temperature: 0.3,
     responseSchema: {

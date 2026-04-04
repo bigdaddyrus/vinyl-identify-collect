@@ -873,7 +873,10 @@ export default function ResultScreen() {
       }, 1500);
     }
 
-    router.navigate('/(tabs)/(home)');
+    router.navigate({
+      pathname: '/(tabs)/portfolio',
+      params: { tab: 'all' },
+    });
   };
 
   const handleRemove = () => {
