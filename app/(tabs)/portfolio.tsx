@@ -641,26 +641,66 @@ export default function PortfolioScreen() {
   };
 
   const handleItemManagePhotos = async (item: AnalysisResult) => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission Required', 'Please grant photo library access.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 3, quality: 0.8 });
-    if (result.canceled || result.assets.length === 0) return;
+    triggerButtonPress();
 
-    const newUris = result.assets.map((a) => a.uri);
-    const existing = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
-
-    if (existing.length > 0) {
-      Alert.alert('Photos', `You have ${existing.length} existing photo${existing.length > 1 ? 's' : ''}.`, [
-        { text: 'Replace All', onPress: () => updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] }) },
-        { text: 'Add to Existing', onPress: () => { const merged = [...existing, ...newUris]; updateCollectionItem(item.id, { images: merged, imageUri: merged[0] }); } },
+    Alert.alert(
+      'Add Photo',
+      'Choose photo source',
+      [
+        {
+          text: 'Camera',
+          onPress: async () => {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert('Permission Required', 'Please grant camera access.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: false,
+              quality: 0.8,
+            });
+            if (result.canceled) return;
+            router.push({
+              pathname: '/(tabs)/(scanner)/crop',
+              params: {
+                imageUri: result.assets[0].uri,
+                imageType: 'front',
+                mode: 'edit',
+                itemId: item.id,
+                returnPath: `/(tabs)/portfolio?tab=${activeTab}`,
+              },
+            });
+          },
+        },
+        {
+          text: 'Photo Library',
+          onPress: async () => {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert('Permission Required', 'Please grant photo library access.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: false,
+              quality: 0.8,
+            });
+            if (result.canceled) return;
+            router.push({
+              pathname: '/(tabs)/(scanner)/crop',
+              params: {
+                imageUri: result.assets[0].uri,
+                imageType: 'front',
+                mode: 'edit',
+                itemId: item.id,
+                returnPath: `/(tabs)/portfolio?tab=${activeTab}`,
+              },
+            });
+          },
+        },
         { text: 'Cancel', style: 'cancel' },
-      ]);
-    } else {
-      updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
-    }
+      ],
+    );
   };
 
   const handleItemReanalyze = (item: AnalysisResult) => {

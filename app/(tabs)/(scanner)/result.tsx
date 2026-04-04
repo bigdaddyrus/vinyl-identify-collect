@@ -1062,46 +1062,65 @@ export default function ResultScreen() {
   // ── Add / Replace Photos ──
   const handleManagePhotos = async () => {
     triggerButtonPress();
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission Required', 'Please grant photo library access.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: 3,
-      quality: 0.8,
-    });
-    if (result.canceled || result.assets.length === 0) return;
 
-    const newUris = result.assets.map((a) => a.uri);
-    const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
-
-    if (existingImages.length > 0) {
-      Alert.alert(
-        'Photos',
-        `You have ${existingImages.length} existing photo${existingImages.length > 1 ? 's' : ''}. What would you like to do?`,
-        [
-          {
-            text: 'Replace All',
-            onPress: () => {
-              updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
-            },
+    Alert.alert(
+      'Add Photo',
+      'Choose photo source',
+      [
+        {
+          text: 'Camera',
+          onPress: async () => {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert('Permission Required', 'Please grant camera access.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: false,
+              quality: 0.8,
+            });
+            if (result.canceled) return;
+            router.push({
+              pathname: '/(tabs)/(scanner)/crop',
+              params: {
+                imageUri: result.assets[0].uri,
+                imageType: 'front',
+                mode: 'edit',
+                itemId: item.id,
+                returnPath: `/(tabs)/(scanner)/result?resultData=${JSON.stringify(item)}&source=${params.source || 'direct'}`,
+              },
+            });
           },
-          {
-            text: 'Add to Existing',
-            onPress: () => {
-              const merged = [...existingImages, ...newUris];
-              updateCollectionItem(item.id, { images: merged, imageUri: merged[0] });
-            },
+        },
+        {
+          text: 'Photo Library',
+          onPress: async () => {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+              Alert.alert('Permission Required', 'Please grant photo library access.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: false,
+              quality: 0.8,
+            });
+            if (result.canceled) return;
+            router.push({
+              pathname: '/(tabs)/(scanner)/crop',
+              params: {
+                imageUri: result.assets[0].uri,
+                imageType: 'front',
+                mode: 'edit',
+                itemId: item.id,
+                returnPath: `/(tabs)/(scanner)/result?resultData=${JSON.stringify(item)}&source=${params.source || 'direct'}`,
+              },
+            });
           },
-          { text: 'Cancel', style: 'cancel' },
-        ],
-      );
-    } else {
-      updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
-    }
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
   };
 
   // ── Re-analyze with LLM ──
