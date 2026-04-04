@@ -640,67 +640,16 @@ export default function PortfolioScreen() {
     ]);
   };
 
-  const handleItemManagePhotos = async (item: AnalysisResult) => {
+  const handleItemManagePhotos = (item: AnalysisResult) => {
     triggerButtonPress();
-
-    Alert.alert(
-      'Add Photo',
-      'Choose photo source',
-      [
-        {
-          text: 'Camera',
-          onPress: async () => {
-            const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert('Permission Required', 'Please grant camera access.');
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: false,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            router.push({
-              pathname: '/(tabs)/(scanner)/crop',
-              params: {
-                imageUri: result.assets[0].uri,
-                imageType: 'front',
-                mode: 'edit',
-                itemId: item.id,
-                returnPath: `/(tabs)/portfolio?tab=${activeTab}`,
-              },
-            });
-          },
-        },
-        {
-          text: 'Photo Library',
-          onPress: async () => {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-              Alert.alert('Permission Required', 'Please grant photo library access.');
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ['images'],
-              allowsEditing: false,
-              quality: 0.8,
-            });
-            if (result.canceled) return;
-            router.push({
-              pathname: '/(tabs)/(scanner)/crop',
-              params: {
-                imageUri: result.assets[0].uri,
-                imageType: 'front',
-                mode: 'edit',
-                itemId: item.id,
-                returnPath: `/(tabs)/portfolio?tab=${activeTab}`,
-              },
-            });
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
+    router.push({
+      pathname: '/(tabs)/(scanner)',
+      params: {
+        mode: 'edit',
+        itemId: item.id,
+        returnPath: `/(tabs)/portfolio?tab=${activeTab}`,
+      },
+    });
   };
 
   const handleItemReanalyze = (item: AnalysisResult) => {

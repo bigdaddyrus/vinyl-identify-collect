@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, scanFromURLAsync, type BarcodeScanningResult } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
@@ -46,6 +46,11 @@ const STEP_INSTRUCTIONS: Record<string, string> = {
 };
 
 export default function ScannerHomeScreen() {
+  const params = useLocalSearchParams<{
+    mode?: string; // 'scanner' | 'edit'
+    itemId?: string;
+    returnPath?: string;
+  }>();
   const hasSeenSnapTips = useAppStore((state) => state.hasSeenSnapTips);
   const isPremium = useAppStore((state) => state.isPremium);
   const scanCount = useAppStore((state) => state.scanCount);
@@ -57,13 +62,22 @@ export default function ScannerHomeScreen() {
   const { cart, removeImage, setBarcode, skipBarcode, rescanBarcode, resetCart } = useScanCart();
   const [barcodeScanned, setBarcodeScanned] = useState(false);
 
-  // Show snap tips on first visit
+  const isEditMode = params.mode === 'edit';
+
+  // Show snap tips on first visit (skip in edit mode)
   useEffect(() => {
-    if (appConfig.snapTips.enabled && !hasSeenSnapTips && !hasShownTips) {
+    if (appConfig.snapTips.enabled && !hasSeenSnapTips && !hasShownTips && !isEditMode) {
       setHasShownTips(true);
       router.push('/(tabs)/(scanner)/tips');
     }
-  }, [hasSeenSnapTips, hasShownTips]);
+  }, [hasSeenSnapTips, hasShownTips, isEditMode]);
+
+  // Skip barcode step when in edit mode
+  useEffect(() => {
+    if (isEditMode && cart.currentStep === 'barcode') {
+      skipBarcode();
+    }
+  }, [isEditMode, cart.currentStep, skipBarcode]);
 
   const snapsRemaining = isPremium ? null : Math.max(0, DAILY_SNAP_LIMIT - scanCount);
 
@@ -134,7 +148,11 @@ export default function ScannerHomeScreen() {
   const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
     router.push({
       pathname: '/(tabs)/(scanner)/crop',
-      params: { imageUri: uri, imageType },
+      params: {
+        imageUri: uri,
+        imageType,
+        // Always use 'scanner' mode so images go to cart for analysis
+      },
     });
   };
 
@@ -189,6 +207,7 @@ export default function ScannerHomeScreen() {
       params: {
         cartImages: JSON.stringify(cart.images),
         ...(cart.barcode ? { barcode: cart.barcode } : {}),
+        ...(isEditMode && params.itemId ? { reanalyzeItemId: params.itemId, source: params.returnPath } : {}),
       },
     });
   };
