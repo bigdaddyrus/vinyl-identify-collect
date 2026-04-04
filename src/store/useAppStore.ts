@@ -7,7 +7,7 @@ import { appConfig } from '@/config/appConfig';
 import { useState, useEffect } from 'react';
 import { getRarityScore } from '@/utils/rarity';
 import { normalizeOrigin, getCoordinates } from '@/data/countryCoordinates';
-import { parseDisplayName } from '@/utils/displayName';
+import { parseDisplayName, composeDisplayName } from '@/utils/displayName';
 
 /**
  * Global app state using Zustand with AsyncStorage persistence
@@ -274,6 +274,8 @@ export const useAppStore = create<AppStore>()(
             item.artist = parsed.artist;
             item.albumName = parsed.albumName;
             item.pressingName = parsed.pressingName || undefined;
+            // Re-compose name from parsed fields to ensure consistent format
+            item.name = composeDisplayName(item.artist, item.albumName, item.pressingName);
             migrated = true;
           }
         }
