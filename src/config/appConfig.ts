@@ -345,7 +345,7 @@ Field notes:
 - rarity: one of "Very Common", "Common", "Uncommon", "Rare", "Very Rare", "Extremely Rare"
 - genre: one of "Blues", "Rock", "Pop", "Jazz", "Funk", "Soul", "Electronic", "Classical", "Hip Hop", "R&B", "World", "Country", "Folk", "Metal", "Latin", "Reggae", "Non-Music", "Stage & Screen"
 - description: concise, under 400 characters. Do NOT mention condition uncertainty or lack of photos - focus on what you can identify.
-- condition: If no images are provided, use "Uncertain". Only assess actual condition if images of the physical record are visible.
+- condition: If images are provided, assess the cover condition and default to "Very Good Plus (VG+)" as a conservative estimate for the vinyl itself (since most collectors store records properly). If you can see visible damage on the cover (tears, water damage, heavy wear), adjust to "Very Good (VG)" or "Good (G)". If no images provided, use "Uncertain".
 - extendedDetails: array of 3-5 sections covering Record Details (icon: "disc", items: format, speed, label, catalog number, matrix/runout), Value Analysis (icon: "cash", items: median sale, price trend, pressing premium), Pressing Info (icon: "search", items: pressing plant, country, variant notes, special features), Historical Context (icon: "book", items: chart positions, cultural significance, production notes), Collector Info (icon: "people", items: demand level, completist notes, related releases). Each section should have 3-5 items.
 - If you cannot identify the record or the image is unclear, set confidence to 0 and explain in description WITHOUT mentioning lack of photos`,
     maxTokens: 4096,
