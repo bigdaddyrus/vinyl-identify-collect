@@ -358,6 +358,9 @@ export interface AnalysisResult {
   estimatedValue: number;
   estimatedValueLow?: number; // For price range display (e.g. $0.59)
   estimatedValueHigh?: number; // For price range display (e.g. $1.40)
+  baseEstimatedValue?: number;     // Original AI VG+ value (never changes)
+  baseEstimatedValueLow?: number;  // Original AI low estimate
+  baseEstimatedValueHigh?: number; // Original AI high estimate
   confidence: number; // 0-100
   description: string;
   imageUri?: string;
@@ -368,6 +371,7 @@ export interface AnalysisResult {
   genre?: string; // Music genre (e.g. "Rock", "Jazz", "Electronic")
   rarity?: string; // e.g. 'Very Common', 'Common', 'Uncommon', 'Rare', 'Very Rare', 'Extremely Rare'
   condition?: string; // e.g. 'Mint', 'AU', 'VF', 'F', 'VG', 'G', 'Fair', 'Poor', 'Uncertain'
+  originalReleaseDate?: string; // "YYYY-MM-DD" — original album release date (not this pressing's year)
   barcode?: string; // EAN/UPC barcode from physical record sleeve
   vibePairing?: string; // Evocative listening recommendation (e.g. "Late-night drive with the windows down")
   foodPairing?: string; // Food pairing suggestion (e.g. "Slow-smoked brisket with cornbread")

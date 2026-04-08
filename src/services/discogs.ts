@@ -35,6 +35,7 @@ export interface DiscogsResult {
   artist: string;
   title: string;
   year: string;
+  released: string; // "YYYY-MM-DD" original release date from Discogs
   label: string;
   genre: string;
   country: string;
@@ -134,6 +135,7 @@ async function fetchRelease(releaseId: number, headers: Record<string, string>):
     artist: release.artists?.map((a: { name: string }) => a.name).join(', ') ?? 'Unknown',
     title: release.title ?? 'Unknown',
     year: String(release.year ?? 'Unknown'),
+    released: release.released ?? '',
     label: release.labels?.[0]?.name ?? 'Unknown',
     genre: release.genres?.[0] ?? 'Unknown',
     country: release.country ?? 'Unknown',

@@ -11,6 +11,7 @@ import { GoldenGlow } from '@/components/GoldenGlow';
 import { HorizontalCarousel } from '@/components/HorizontalCarousel';
 import { useAppStore } from '@/store/useAppStore';
 import { appConfig } from '@/config/appConfig';
+import { CarouselItem } from '@/types';
 import { colors, typography, spacing, borderRadius } from '@/theme';
 import { exportCollectionAsJSON, exportImageAssetsZip } from '@/utils/exportCollection';
 
@@ -30,6 +31,12 @@ export default function HomeScreen() {
 
   const handleGrading = () => {
     router.push('/(tabs)/(scanner)');
+  };
+
+  const handleEducationalItem = (item: CarouselItem) => {
+    if (item.id === '1') {
+      router.push('/(tabs)/(home)/grading-guide');
+    }
   };
 
   const handleProBadge = () => {
@@ -255,6 +262,7 @@ export default function HomeScreen() {
           <HorizontalCarousel
             title={home.cards.educational.title}
             items={home.cards.educational.items}
+            onItemPress={handleEducationalItem}
           />
         )}
       </ScrollView>
