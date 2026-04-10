@@ -25,8 +25,6 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { scanFromURLAsync } from 'expo-camera';
 import { GradientButton } from '@/components/GradientButton';
 import { SetPickerModal } from '@/components/SetPickerModal';
 import { useAppStore } from '@/store/useAppStore';
@@ -956,7 +954,6 @@ export default function ResultScreen() {
       options.push({ text: 'Add to Set', onPress: () => setShowSetPicker(true) });
       options.push({ text: 'Edit', onPress: handleEdit });
       options.push({ text: item.barcode ? 'Update Barcode' : 'Add Barcode', onPress: handleAddBarcode });
-      options.push({ text: 'Add / Replace Photos', onPress: handleManagePhotos });
       options.push({ text: 'Re-analyze', onPress: handleReanalyze });
     }
 
@@ -992,82 +989,12 @@ export default function ResultScreen() {
   // ── Add / Scan Barcode ──
   const handleAddBarcode = () => {
     triggerButtonPress();
-    Alert.alert('Add Barcode', undefined, [
-      {
-        text: 'Enter Manually',
-        onPress: () => {
-          Alert.prompt(
-            'Enter Barcode',
-            'Type the barcode number (EAN/UPC)',
-            async (text) => {
-              const trimmed = text?.trim();
-              if (!trimmed || trimmed.length < 8) {
-                if (trimmed) Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
-                return;
-              }
-              updateCollectionItem(item.id, { barcode: trimmed });
-              // Try Discogs lookup
-              const discogs = await searchByBarcode(trimmed);
-              if (discogs) {
-                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
-                Alert.alert('Barcode Added', 'Discogs data enriched successfully.');
-              } else {
-                Alert.alert('Barcode Saved', 'No Discogs match found for this barcode.');
-              }
-            },
-            'plain-text',
-            item.barcode ?? '',
-            'number-pad',
-          );
-        },
-      },
-      {
-        text: 'Scan from Photo',
-        onPress: async () => {
-          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!perm.granted) {
-            Alert.alert('Permission Required', 'Please grant photo library access.');
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: false,
-            quality: 0.8,
-          });
-          if (result.canceled) return;
-          try {
-            const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
-            if (barcodes.length > 0) {
-              const code = barcodes[0].data;
-              updateCollectionItem(item.id, { barcode: code });
-              const discogs = await searchByBarcode(code);
-              if (discogs) {
-                updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
-                Alert.alert('Barcode Found', `${code} — Discogs data enriched.`);
-              } else {
-                Alert.alert('Barcode Found', `${code} saved. No Discogs match found.`);
-              }
-            } else {
-              Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image.');
-            }
-          } catch {
-            Alert.alert('Scan Failed', 'Unable to scan barcode from image.');
-          }
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  // ── Add / Replace Photos ──
-  const handleManagePhotos = () => {
-    triggerButtonPress();
+    // Go directly to scanner barcode step
     router.push({
       pathname: '/(tabs)/(scanner)',
       params: {
-        mode: 'edit',
+        mode: 'barcode',
         itemId: item.id,
-        returnPath: `/(tabs)/(scanner)/result?resultData=${encodeURIComponent(JSON.stringify(item))}&source=${params.source || 'direct'}`,
       },
     });
   };
@@ -1390,6 +1317,7 @@ export default function ResultScreen() {
         selectedSetIds={currentSetIds}
         onDone={(ids) => {
           updateCollectionItem(item.id, { setIds: ids });
+          showSuccessToast('Set updated');
           setShowSetPicker(false);
         }}
         onClose={() => setShowSetPicker(false)}

@@ -10,6 +10,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
@@ -44,6 +45,7 @@ export function BulkMoveModal({ visible, itemIds, onDone, onClose }: Props) {
   const handleCreateSet = () => {
     const trimmed = newSetName.trim();
     if (!trimmed) return;
+    Keyboard.dismiss();
     const newSet = createSet(trimmed);
     setNewSetName('');
     setIsCreating(false);
@@ -83,6 +85,8 @@ export function BulkMoveModal({ visible, itemIds, onDone, onClose }: Props) {
             data={sets}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             renderItem={({ item }) => {
               const itemCount = getItemsInSet(item.id).length;
               return (

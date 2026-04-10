@@ -10,6 +10,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
@@ -40,6 +41,7 @@ export function SetPickerModal({ visible, selectedSetIds, onDone, onClose }: Pro
   const handleCreateSet = () => {
     const trimmed = newSetName.trim();
     if (!trimmed) return;
+    Keyboard.dismiss();
     const newSet = createSet(trimmed);
     setSelected((prev) => [...prev, newSet.id]);
     setNewSetName('');
@@ -87,6 +89,8 @@ export function SetPickerModal({ visible, selectedSetIds, onDone, onClose }: Pro
             data={sets}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             renderItem={({ item }) => {
               const isSelected = selected.includes(item.id);
               const itemCount = getItemsInSet(item.id).length;

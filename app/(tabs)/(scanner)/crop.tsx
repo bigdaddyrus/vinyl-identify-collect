@@ -330,11 +330,16 @@ export default function CropScreen() {
       }
     } catch {
       if (mode === 'edit' && itemId) {
-        // If crop fails in edit mode, add original image
+        // If crop fails in edit mode, add original image if valid
+        if (!imageUri) {
+          Alert.alert('Error', 'Unable to add photo. Invalid image.');
+          router.back();
+          return;
+        }
         const item = collection.find((i) => i.id === itemId);
         if (item) {
           const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
-          const updatedImages = [...existingImages, imageUri || ''];
+          const updatedImages = [...existingImages, imageUri];
           updateCollectionItem(itemId, {
             images: updatedImages,
             imageUri: updatedImages[0],

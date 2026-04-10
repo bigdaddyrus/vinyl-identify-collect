@@ -281,10 +281,10 @@ export async function analyzeImages(
   // Sanitize extended details (Zod validates shape but we also clean the content)
   const extendedDetails = sanitizeExtendedDetails(validated.extendedDetails);
 
-  // Store AI's VG+ baseline values before any condition adjustment
-  const baseValue = validated.estimatedValue || 0;
-  const baseLow = validated.estimatedValueLow != null && validated.estimatedValueLow > 0 ? validated.estimatedValueLow : undefined;
-  const baseHigh = validated.estimatedValueHigh != null && validated.estimatedValueHigh > 0 ? validated.estimatedValueHigh : undefined;
+  // Store AI's VG+ baseline values before any condition adjustment (rounded to whole dollars)
+  const baseValue = Math.round(validated.estimatedValue || 0);
+  const baseLow = validated.estimatedValueLow != null && validated.estimatedValueLow > 0 ? Math.round(validated.estimatedValueLow) : undefined;
+  const baseHigh = validated.estimatedValueHigh != null && validated.estimatedValueHigh > 0 ? Math.round(validated.estimatedValueHigh) : undefined;
 
   // Resolve original release date: LLM value takes priority, Discogs released as fallback
   const originalReleaseDate = validated.originalReleaseDate
@@ -363,8 +363,8 @@ export async function analyzeImages(
     result.name = composeDisplayName(result.artist, result.albumName, result.pressingName);
   }
 
-  // Apply condition-based price adjustment when AI returns non-VG+ condition
-  if (result.condition && result.condition !== 'Very Good Plus (VG+)' && result.condition !== 'Uncertain') {
+  // Apply condition-based price adjustment when AI returns non-VG+ condition (including Uncertain for ±50% range)
+  if (result.condition && result.condition !== 'Very Good Plus (VG+)') {
     const adjusted = applyConditionPricing(result.baseEstimatedValue!, result.condition);
     result.estimatedValue = adjusted.estimatedValue;
     result.estimatedValueLow = adjusted.estimatedValueLow;

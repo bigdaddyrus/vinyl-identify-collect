@@ -54,9 +54,9 @@ export function applyConditionPricing(
   const multiplier = CONDITION_MULTIPLIERS[condition] ?? 1.0;
   const spread = CONDITION_SPREAD[condition] ?? UNCERTAIN_SPREAD;
 
-  const estimatedValue = Math.round(baseValue * multiplier * 100) / 100;
-  const estimatedValueLow = Math.round(estimatedValue * (1 - spread) * 100) / 100;
-  const estimatedValueHigh = Math.round(estimatedValue * (1 + spread) * 100) / 100;
+  const estimatedValue = Math.round(baseValue * multiplier);
+  const estimatedValueLow = Math.round(estimatedValue * (1 - spread));
+  const estimatedValueHigh = Math.round(estimatedValue * (1 + spread));
 
   return { estimatedValue, estimatedValueLow, estimatedValueHigh };
 }

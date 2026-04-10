@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -131,10 +131,7 @@ export default function PortfolioScreen() {
                 (progress) => setBackpopProgress(progress),
               );
               setBackpopProgress(null);
-              Alert.alert(
-                'Enrichment Complete',
-                `Enriched: ${result.enriched}\nNot found: ${result.failed}\nAlready had data: ${result.skipped}`,
-              );
+              showSuccessToast(`Enriched ${result.enriched} record${result.enriched === 1 ? '' : 's'}`);
             } catch {
               Alert.alert('Error', 'Discogs enrichment failed. Please try again.');
             } finally {
@@ -385,6 +382,7 @@ export default function PortfolioScreen() {
                 onChangeText={setSearchQuery}
                 returnKeyType="search"
                 autoCorrect={false}
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
@@ -595,9 +593,9 @@ export default function PortfolioScreen() {
               const discogs = await searchByBarcode(trimmed);
               if (discogs) {
                 updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
-                Alert.alert('Barcode Added', 'Discogs data enriched successfully.');
+                showSuccessToast('Barcode added');
               } else {
-                Alert.alert('Barcode Saved', 'No Discogs match found.');
+                showSuccessToast('Barcode saved');
               }
             },
             'plain-text',
@@ -624,9 +622,9 @@ export default function PortfolioScreen() {
               const discogs = await searchByBarcode(code);
               if (discogs) {
                 updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
-                Alert.alert('Barcode Found', `${code} — Discogs data enriched.`);
+                showSuccessToast('Barcode added');
               } else {
-                Alert.alert('Barcode Found', `${code} saved. No Discogs match found.`);
+                showSuccessToast('Barcode saved');
               }
             } else {
               Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image.');
@@ -715,6 +713,8 @@ export default function PortfolioScreen() {
       <FlatList
         data={activeTab === 'all' ? getSortedCollection() : []}
         keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         renderItem={({ item }) => (
           activeTab === 'all' ? (
             <View style={styles.selectableRow}>
