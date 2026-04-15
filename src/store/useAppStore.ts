@@ -7,7 +7,7 @@ import { appConfig } from '@/config/appConfig';
 import { useState, useEffect } from 'react';
 import { getRarityScore } from '@/utils/rarity';
 import { normalizeOrigin, getCoordinates } from '@/data/countryCoordinates';
-import { parseDisplayName } from '@/utils/displayName';
+import { parseDisplayName, composeDisplayName } from '@/utils/displayName';
 
 /**
  * Global app state using Zustand with AsyncStorage persistence
@@ -266,17 +266,29 @@ export const useAppStore = create<AppStore>()(
       storage: createJSONStorage(() => AsyncStorage),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        // Migrate legacy items that have name but no artist/albumName
         let migrated = false;
+
         for (const item of state.collection) {
+          // Migrate legacy items that have name but no artist/albumName
           if (item.artist == null && item.albumName == null && item.name) {
             const parsed = parseDisplayName(item.name);
             item.artist = parsed.artist;
             item.albumName = parsed.albumName;
             item.pressingName = parsed.pressingName || undefined;
+            // Re-compose name from parsed fields to ensure consistent format
+            item.name = composeDisplayName(item.artist, item.albumName, item.pressingName);
             migrated = true;
           }
+          // Fix name field for already-migrated items (have artist/albumName but name doesn't match composed format)
+          else if (item.artist != null && item.albumName != null) {
+            const expectedName = composeDisplayName(item.artist, item.albumName, item.pressingName);
+            if (item.name !== expectedName) {
+              item.name = expectedName;
+              migrated = true;
+            }
+          }
         }
+
         if (migrated) {
           useAppStore.setState({ collection: [...state.collection] });
         }

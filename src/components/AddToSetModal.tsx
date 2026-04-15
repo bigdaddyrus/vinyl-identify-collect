@@ -8,6 +8,7 @@ import {
   FlatList,
   TextInput,
   Pressable,
+  Keyboard,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -138,6 +139,7 @@ export function AddToSetModal({ visible, setId, onClose }: Props) {
               onChangeText={setSearchQuery}
               returnKeyType="search"
               autoCorrect={false}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
@@ -152,6 +154,7 @@ export function AddToSetModal({ visible, setId, onClose }: Props) {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             renderItem={({ item }) => {
               const isSelected = selectedIds.has(item.id);
               return (

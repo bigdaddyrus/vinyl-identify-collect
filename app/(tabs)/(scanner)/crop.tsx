@@ -19,6 +19,8 @@ import { colors, typography, spacing } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { useScanCart } from '@/context/ScanCartContext';
 import { CapturedImage } from '@/types';
+import { useAppStore } from '@/store/useAppStore';
+import { showSuccessToast } from '@/components/SuccessToast';
 
 const MIN_CROP_SIZE = 80;
 const HANDLE_HIT = 28; // touch target for corner handles
@@ -28,8 +30,16 @@ const CORNER_THICKNESS = 3;
 const VALID_IMAGE_TYPES: CapturedImage['type'][] = ['front', 'back', 'label'];
 
 export default function CropScreen() {
-  const { imageUri, imageType } = useLocalSearchParams<{ imageUri: string; imageType: string }>();
+  const { imageUri, imageType, mode, itemId, returnPath } = useLocalSearchParams<{
+    imageUri: string;
+    imageType: string;
+    mode?: string; // 'scanner' | 'edit'
+    itemId?: string;
+    returnPath?: string;
+  }>();
   const { addImage } = useScanCart();
+  const updateCollectionItem = useAppStore((state) => state.updateCollectionItem);
+  const collection = useAppStore((state) => state.collection);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [canvasLayout, setCanvasLayout] = useState<{ width: number; height: number } | null>(null);
   const [isCropping, setIsCropping] = useState(false);
@@ -295,13 +305,57 @@ export default function CropScreen() {
         { compress: 0.85, format: SaveFormat.JPEG }
       );
 
-      // Add cropped image to cart and return to scanner
-      addImage({ type: safeType, uri: result.uri });
-      router.replace('/(tabs)/(scanner)');
+      if (mode === 'edit' && itemId) {
+        // Edit mode: update existing collection item
+        const item = collection.find((i) => i.id === itemId);
+        if (item) {
+          const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+          const updatedImages = [...existingImages, result.uri];
+          updateCollectionItem(itemId, {
+            images: updatedImages,
+            imageUri: updatedImages[0],
+          });
+          showSuccessToast('Photo added');
+        }
+        // Navigate back to where we came from
+        if (returnPath) {
+          router.replace(returnPath);
+        } else {
+          router.back();
+        }
+      } else {
+        // Scanner mode: add cropped image to cart and return to scanner
+        addImage({ type: safeType, uri: result.uri });
+        router.replace('/(tabs)/(scanner)');
+      }
     } catch {
-      // If crop fails, add original image to cart
-      addImage({ type: safeType, uri: imageUri || '' });
-      router.replace('/(tabs)/(scanner)');
+      if (mode === 'edit' && itemId) {
+        // If crop fails in edit mode, add original image if valid
+        if (!imageUri) {
+          Alert.alert('Error', 'Unable to add photo. Invalid image.');
+          router.back();
+          return;
+        }
+        const item = collection.find((i) => i.id === itemId);
+        if (item) {
+          const existingImages = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
+          const updatedImages = [...existingImages, imageUri];
+          updateCollectionItem(itemId, {
+            images: updatedImages,
+            imageUri: updatedImages[0],
+          });
+          showSuccessToast('Photo added');
+        }
+        if (returnPath) {
+          router.replace(returnPath);
+        } else {
+          router.back();
+        }
+      } else {
+        // Scanner mode: add original image to cart
+        addImage({ type: safeType, uri: imageUri || '' });
+        router.replace('/(tabs)/(scanner)');
+      }
     } finally {
       setIsCropping(false);
     }

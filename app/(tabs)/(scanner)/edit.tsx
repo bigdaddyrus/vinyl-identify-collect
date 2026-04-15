@@ -23,6 +23,7 @@ import { colors, spacing, borderRadius } from '@/theme';
 import { triggerButtonPress } from '@/utils/haptics';
 import { showSuccessToast } from '@/components/SuccessToast';
 import { composeDisplayName } from '@/utils/displayName';
+import { applyConditionPricing } from '@/utils/conditionPricing';
 
 const GENRE_OPTIONS = [
   'Blues', 'Rock', 'Pop', 'Jazz', 'Funk', 'Soul', 'Electronic',
@@ -94,6 +95,19 @@ export default function EditScreen() {
     const trimmedArtist = artist.trim();
     const trimmedAlbum = albumName.trim();
     const trimmedPressing = pressingName.trim();
+
+    // Recalculate low/high range if condition changed and base values exist
+    const finalValue = isNaN(numericValue) ? item.estimatedValue : numericValue;
+    let rangeUpdates: Partial<{ estimatedValueLow: number; estimatedValueHigh: number }> = {};
+    if (grade && finalValue != null && finalValue > 0) {
+      // Derive range from the current saved value to maintain consistency with manual overrides
+      const adjusted = applyConditionPricing(finalValue, grade);
+      rangeUpdates = {
+        estimatedValueLow: adjusted.estimatedValueLow,
+        estimatedValueHigh: adjusted.estimatedValueHigh,
+      };
+    }
+
     updateCollectionItem(item.id, {
       artist: trimmedArtist || item.artist,
       albumName: trimmedAlbum || item.albumName,
@@ -104,7 +118,7 @@ export default function EditScreen() {
         trimmedPressing || item.pressingName
       ),
       year: year.trim() || item.year,
-      estimatedValue: isNaN(numericValue) ? item.estimatedValue : numericValue,
+      estimatedValue: finalValue,
       condition: grade || undefined,
       label: label.trim() || undefined,
       origin: origin.trim() || item.origin,
@@ -112,6 +126,7 @@ export default function EditScreen() {
       collectionDate: parsedDate ?? item.collectionDate ?? item.createdAt,
       notes: notes.trim() || undefined,
       setIds,
+      ...rangeUpdates,
     });
     showSuccessToast('Changes saved');
     router.back();
@@ -343,6 +358,11 @@ export default function EditScreen() {
                   style={[styles.pickerOption, grade === option && styles.pickerOptionActive]}
                   onPress={() => {
                     setGrade(option);
+                    // Auto-adjust value based on condition if base value is available
+                    if (item?.baseEstimatedValue != null && item.baseEstimatedValue > 0) {
+                      const adjusted = applyConditionPricing(item.baseEstimatedValue, option);
+                      setValue(adjusted.estimatedValue.toString());
+                    }
                     setShowGradePicker(false);
                   }}
                   activeOpacity={0.7}

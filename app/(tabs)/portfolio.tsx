@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -131,10 +131,7 @@ export default function PortfolioScreen() {
                 (progress) => setBackpopProgress(progress),
               );
               setBackpopProgress(null);
-              Alert.alert(
-                'Enrichment Complete',
-                `Enriched: ${result.enriched}\nNot found: ${result.failed}\nAlready had data: ${result.skipped}`,
-              );
+              showSuccessToast(`Enriched ${result.enriched} record${result.enriched === 1 ? '' : 's'}`);
             } catch {
               Alert.alert('Error', 'Discogs enrichment failed. Please try again.');
             } finally {
@@ -385,6 +382,7 @@ export default function PortfolioScreen() {
                 onChangeText={setSearchQuery}
                 returnKeyType="search"
                 autoCorrect={false}
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
@@ -595,9 +593,9 @@ export default function PortfolioScreen() {
               const discogs = await searchByBarcode(trimmed);
               if (discogs) {
                 updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
-                Alert.alert('Barcode Added', 'Discogs data enriched successfully.');
+                showSuccessToast('Barcode added');
               } else {
-                Alert.alert('Barcode Saved', 'No Discogs match found.');
+                showSuccessToast('Barcode saved');
               }
             },
             'plain-text',
@@ -624,9 +622,9 @@ export default function PortfolioScreen() {
               const discogs = await searchByBarcode(code);
               if (discogs) {
                 updateCollectionItem(item.id, buildDiscogsUpdates(discogs));
-                Alert.alert('Barcode Found', `${code} — Discogs data enriched.`);
+                showSuccessToast('Barcode added');
               } else {
-                Alert.alert('Barcode Found', `${code} saved. No Discogs match found.`);
+                showSuccessToast('Barcode saved');
               }
             } else {
               Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image.');
@@ -640,27 +638,16 @@ export default function PortfolioScreen() {
     ]);
   };
 
-  const handleItemManagePhotos = async (item: AnalysisResult) => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission Required', 'Please grant photo library access.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 3, quality: 0.8 });
-    if (result.canceled || result.assets.length === 0) return;
-
-    const newUris = result.assets.map((a) => a.uri);
-    const existing = item.images?.length ? item.images : item.imageUri ? [item.imageUri] : [];
-
-    if (existing.length > 0) {
-      Alert.alert('Photos', `You have ${existing.length} existing photo${existing.length > 1 ? 's' : ''}.`, [
-        { text: 'Replace All', onPress: () => updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] }) },
-        { text: 'Add to Existing', onPress: () => { const merged = [...existing, ...newUris]; updateCollectionItem(item.id, { images: merged, imageUri: merged[0] }); } },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    } else {
-      updateCollectionItem(item.id, { images: newUris, imageUri: newUris[0] });
-    }
+  const handleItemManagePhotos = (item: AnalysisResult) => {
+    triggerButtonPress();
+    router.push({
+      pathname: '/(tabs)/(scanner)',
+      params: {
+        mode: 'edit',
+        itemId: item.id,
+        returnPath: `/(tabs)/portfolio?tab=${activeTab}`,
+      },
+    });
   };
 
   const handleItemReanalyze = (item: AnalysisResult) => {
@@ -726,6 +713,8 @@ export default function PortfolioScreen() {
       <FlatList
         data={activeTab === 'all' ? getSortedCollection() : []}
         keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         renderItem={({ item }) => (
           activeTab === 'all' ? (
             <View style={styles.selectableRow}>

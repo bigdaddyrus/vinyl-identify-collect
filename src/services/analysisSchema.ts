@@ -18,6 +18,7 @@ export const analysisResponseSchema = z.object({
   vibePairing: z.string().optional(),
   foodPairing: z.string().optional(),
   drinkPairing: z.string().optional(),
+  originalReleaseDate: z.string().optional().default(''),
   albumArtQuery: z.string().optional(),
   description: z.string().default('No description available.'),
   extendedDetails: z

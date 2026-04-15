@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, scanFromURLAsync, type BarcodeScanningResult } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
@@ -46,9 +46,15 @@ const STEP_INSTRUCTIONS: Record<string, string> = {
 };
 
 export default function ScannerHomeScreen() {
+  const params = useLocalSearchParams<{
+    mode?: string; // 'scanner' | 'edit' | 'barcode'
+    itemId?: string;
+    returnPath?: string;
+  }>();
   const hasSeenSnapTips = useAppStore((state) => state.hasSeenSnapTips);
   const isPremium = useAppStore((state) => state.isPremium);
   const scanCount = useAppStore((state) => state.scanCount);
+  const updateCollectionItem = useAppStore((state) => state.updateCollectionItem);
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [hasShownTips, setHasShownTips] = useState(false);
@@ -57,22 +63,60 @@ export default function ScannerHomeScreen() {
   const { cart, removeImage, setBarcode, skipBarcode, rescanBarcode, resetCart } = useScanCart();
   const [barcodeScanned, setBarcodeScanned] = useState(false);
 
-  // Show snap tips on first visit
+  const isEditMode = params.mode === 'edit';
+  const isBarcodeMode = params.mode === 'barcode';
+
+  // Show snap tips on first visit (skip in edit/barcode mode)
   useEffect(() => {
-    if (appConfig.snapTips.enabled && !hasSeenSnapTips && !hasShownTips) {
+    if (appConfig.snapTips.enabled && !hasSeenSnapTips && !hasShownTips && !isEditMode && !isBarcodeMode) {
       setHasShownTips(true);
       router.push('/(tabs)/(scanner)/tips');
     }
-  }, [hasSeenSnapTips, hasShownTips]);
+  }, [hasSeenSnapTips, hasShownTips, isEditMode]);
+
+  // Skip barcode step when in edit mode (but not in barcode mode)
+  useEffect(() => {
+    if (isEditMode && !isBarcodeMode && cart.currentStep === 'barcode') {
+      skipBarcode();
+    }
+  }, [isEditMode, isBarcodeMode, cart.currentStep, skipBarcode]);
+
+  // Reset barcodeScanned when returning to barcode step
+  useEffect(() => {
+    if (cart.currentStep === 'barcode') {
+      setBarcodeScanned(false);
+    }
+  }, [cart.currentStep]);
 
   const snapsRemaining = isPremium ? null : Math.max(0, DAILY_SNAP_LIMIT - scanCount);
 
-  const handleBarcodeScanned = useCallback((result: BarcodeScanningResult) => {
-    if (barcodeScanned || cart.currentStep !== 'barcode') return;
+  const handleBarcodeScanned = useCallback(async (result: BarcodeScanningResult) => {
+    if (barcodeScanned || (!isBarcodeMode && cart.currentStep !== 'barcode')) return;
     setBarcodeScanned(true);
     triggerButtonPress();
+
+    // If in barcode mode, update the item and navigate back
+    if (isBarcodeMode && params.itemId) {
+      const { searchByBarcode } = await import('@/services/discogs');
+      const { buildDiscogsUpdates } = await import('@/utils/mergeDiscogs');
+      const { showSuccessToast } = await import('@/components/SuccessToast');
+
+      updateCollectionItem(params.itemId, { barcode: result.data });
+
+      // Try Discogs lookup
+      const discogs = await searchByBarcode(result.data);
+      if (discogs) {
+        updateCollectionItem(params.itemId, buildDiscogsUpdates(discogs));
+      }
+
+      showSuccessToast('Barcode added');
+      // Navigate back to result screen (store already updated)
+      router.back();
+      return;
+    }
+
     setBarcode(result.data);
-  }, [barcodeScanned, cart.currentStep, setBarcode]);
+  }, [barcodeScanned, cart.currentStep, setBarcode, isBarcodeMode, params.itemId, updateCollectionItem]);
 
   const handleIdentifyNow = () => {
     triggerButtonPress();
@@ -87,14 +131,36 @@ export default function ScannerHomeScreen() {
     Alert.prompt(
       'Enter Barcode',
       'Type the barcode number (EAN/UPC)',
-      (text) => {
+      async (text) => {
         const trimmed = text?.trim();
-        if (trimmed && trimmed.length >= 8) {
-          setBarcodeScanned(true);
-          setBarcode(trimmed);
-        } else if (trimmed) {
-          Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+        if (!trimmed || trimmed.length < 8) {
+          if (trimmed) Alert.alert('Invalid Barcode', 'Barcode must be at least 8 digits.');
+          return;
         }
+
+        setBarcodeScanned(true);
+
+        // If in barcode mode, update the item and navigate back
+        if (isBarcodeMode && params.itemId) {
+          const { searchByBarcode } = await import('@/services/discogs');
+          const { buildDiscogsUpdates } = await import('@/utils/mergeDiscogs');
+          const { showSuccessToast } = await import('@/components/SuccessToast');
+
+          updateCollectionItem(params.itemId, { barcode: trimmed });
+
+          // Try Discogs lookup
+          const discogs = await searchByBarcode(trimmed);
+          if (discogs) {
+            updateCollectionItem(params.itemId, buildDiscogsUpdates(discogs));
+          }
+
+          showSuccessToast('Barcode added');
+          // Navigate back to result screen
+          router.back();
+          return;
+        }
+
+        setBarcode(trimmed);
       },
       'plain-text',
       '',
@@ -121,8 +187,30 @@ export default function ScannerHomeScreen() {
     try {
       const barcodes = await scanFromURLAsync(result.assets[0].uri, ['ean13', 'ean8', 'upc_a', 'upc_e']);
       if (barcodes.length > 0) {
+        const code = barcodes[0].data;
         setBarcodeScanned(true);
-        setBarcode(barcodes[0].data);
+
+        // If in barcode mode, update the item and navigate back
+        if (isBarcodeMode && params.itemId) {
+          const { searchByBarcode } = await import('@/services/discogs');
+          const { buildDiscogsUpdates } = await import('@/utils/mergeDiscogs');
+          const { showSuccessToast } = await import('@/components/SuccessToast');
+
+          updateCollectionItem(params.itemId, { barcode: code });
+
+          // Try Discogs lookup
+          const discogs = await searchByBarcode(code);
+          if (discogs) {
+            updateCollectionItem(params.itemId, buildDiscogsUpdates(discogs));
+          }
+
+          showSuccessToast('Barcode added');
+          // Navigate back to result screen
+          router.back();
+          return;
+        }
+
+        setBarcode(code);
       } else {
         Alert.alert('No Barcode Found', 'Could not detect a barcode in the selected image. Try a clearer photo or enter manually.');
       }
@@ -134,7 +222,13 @@ export default function ScannerHomeScreen() {
   const goToCrop = (uri: string, imageType: CapturedImage['type']) => {
     router.push({
       pathname: '/(tabs)/(scanner)/crop',
-      params: { imageUri: uri, imageType },
+      params: {
+        imageUri: uri,
+        imageType,
+        mode: params.mode,
+        itemId: params.itemId,
+        returnPath: params.returnPath,
+      },
     });
   };
 
@@ -189,6 +283,7 @@ export default function ScannerHomeScreen() {
       params: {
         cartImages: JSON.stringify(cart.images),
         ...(cart.barcode ? { barcode: cart.barcode } : {}),
+        ...(isEditMode && params.itemId ? { reanalyzeItemId: params.itemId, source: params.returnPath } : {}),
       },
     });
   };
@@ -301,7 +396,7 @@ export default function ScannerHomeScreen() {
     );
   }
 
-  const isBarcode = cart.currentStep === 'barcode';
+  const isBarcode = isBarcodeMode || cart.currentStep === 'barcode';
   const isReady = cart.currentStep === 'ready';
   const hasLabel = cart.images.some((img) => img.type === 'label');
 
@@ -323,8 +418,21 @@ export default function ScannerHomeScreen() {
       {/* Top Bar */}
       <SafeAreaView edges={['top']} style={styles.topBarSafe}>
         <View style={styles.topBar}>
-          {/* Close — clear cart and go home */}
-          <TouchableOpacity style={styles.topBarIcon} onPress={() => { resetCart(); router.navigate('/(tabs)/(home)'); }} activeOpacity={0.7} accessibilityLabel="Close scanner" accessibilityRole="button">
+          {/* Close — go back if in barcode mode, otherwise go home */}
+          <TouchableOpacity
+            style={styles.topBarIcon}
+            onPress={() => {
+              if (isBarcodeMode) {
+                router.back();
+              } else {
+                resetCart();
+                router.navigate('/(tabs)/(home)');
+              }
+            }}
+            activeOpacity={0.7}
+            accessibilityLabel="Close scanner"
+            accessibilityRole="button"
+          >
             <Ionicons name="close" size={22} color={colors.white} />
           </TouchableOpacity>
 
@@ -338,15 +446,15 @@ export default function ScannerHomeScreen() {
 
           {/* Right actions */}
           <View style={styles.topBarRight}>
-            {/* Rescan barcode (when past barcode step) */}
-            {!isBarcode && (
+            {/* Rescan barcode (when past barcode step, not in barcode mode) */}
+            {!isBarcode && !isBarcodeMode && (
               <TouchableOpacity style={styles.topBarIcon} onPress={() => { triggerButtonPress(); setBarcodeScanned(false); rescanBarcode(); }} activeOpacity={0.7}>
                 <Ionicons name="barcode-outline" size={20} color={colors.white} />
               </TouchableOpacity>
             )}
 
-            {/* Reset cart (if images captured) */}
-            {cart.images.length > 0 && (
+            {/* Reset cart (if images captured, not in barcode mode) */}
+            {!isBarcodeMode && cart.images.length > 0 && (
               <TouchableOpacity style={styles.topBarIcon} onPress={handleResetCart} activeOpacity={0.7}>
                 <Ionicons name="refresh" size={20} color={colors.white} />
               </TouchableOpacity>
@@ -380,15 +488,15 @@ export default function ScannerHomeScreen() {
             <View style={[styles.corner, styles.cornerBR]} />
           </View>
           <Text style={styles.instructionText}>
-            {STEP_INSTRUCTIONS[cart.currentStep] || appConfig.scanner.instructionText}
+            {isBarcodeMode ? STEP_INSTRUCTIONS.barcode : (STEP_INSTRUCTIONS[cart.currentStep] || appConfig.scanner.instructionText)}
           </Text>
         </View>
       </GestureDetector>
 
       {/* Bottom Controls */}
       <SafeAreaView edges={['bottom']} style={styles.bottomSafe}>
-        {/* Thumbnail strip — tap to remove */}
-        {cart.images.length > 0 && (
+        {/* Thumbnail strip — tap to remove (hidden in barcode mode) */}
+        {!isBarcodeMode && cart.images.length > 0 && (
           <View style={styles.thumbnailStrip}>
             {cart.images.map((img) => (
               <TouchableOpacity
@@ -415,8 +523,8 @@ export default function ScannerHomeScreen() {
           </View>
         )}
 
-        {/* Barcode detected — show number + Identify Now shortcut */}
-        {cart.barcode && !isBarcode && (
+        {/* Barcode detected — show number + Identify Now shortcut (hidden in barcode mode) */}
+        {!isBarcodeMode && cart.barcode && !isBarcode && (
           <View style={styles.barcodeBar}>
             <View style={styles.barcodeInfo}>
               <Ionicons name="barcode" size={14} color={colors.success} />
@@ -457,14 +565,16 @@ export default function ScannerHomeScreen() {
                 <Ionicons name="images-outline" size={18} color={colors.accentPrimary} />
                 <Text style={styles.barcodeActionText}>Photo</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.barcodeActionButton}
-                onPress={() => { triggerButtonPress(); skipBarcode(); }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
-                <Text style={styles.barcodeActionText}>Skip</Text>
-              </TouchableOpacity>
+              {!isBarcodeMode && (
+                <TouchableOpacity
+                  style={styles.barcodeActionButton}
+                  onPress={() => { triggerButtonPress(); skipBarcode(); }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="play-skip-forward" size={18} color={colors.accentPrimary} />
+                  <Text style={styles.barcodeActionText}>Skip</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         ) : isReady ? (

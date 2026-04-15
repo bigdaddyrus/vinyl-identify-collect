@@ -4,6 +4,7 @@ import { AnalysisResult, CapturedImage, ExtendedDetailSection } from '@/types';
 import { appConfig } from '@/config/appConfig';
 import { normalizeOrigin } from '@/data/countryCoordinates';
 import { composeDisplayName } from '@/utils/displayName';
+import { applyConditionPricing } from '@/utils/conditionPricing';
 import { analysisResponseSchema } from './analysisSchema';
 import type { DiscogsResult } from './discogs';
 
@@ -111,6 +112,7 @@ function buildDiscogsEnrichedPrompt(discogsData: DiscogsResult, basePrompt: stri
 Artist: ${discogsData.artist}
 Title: ${discogsData.title}
 Year: ${discogsData.year}
+Released: ${discogsData.released || 'Unknown'}
 Label: ${discogsData.label}
 Genre: ${discogsData.genre}
 Styles: ${stylesStr}
@@ -279,6 +281,18 @@ export async function analyzeImages(
   // Sanitize extended details (Zod validates shape but we also clean the content)
   const extendedDetails = sanitizeExtendedDetails(validated.extendedDetails);
 
+  // Store AI's VG+ baseline values before any condition adjustment (rounded to whole dollars)
+  const baseValue = Math.round(validated.estimatedValue || 0);
+  const baseLow = validated.estimatedValueLow != null && validated.estimatedValueLow > 0 ? Math.round(validated.estimatedValueLow) : undefined;
+  const baseHigh = validated.estimatedValueHigh != null && validated.estimatedValueHigh > 0 ? Math.round(validated.estimatedValueHigh) : undefined;
+
+  // Resolve original release date: LLM value takes priority, Discogs released as fallback
+  const originalReleaseDate = validated.originalReleaseDate
+    ? validated.originalReleaseDate
+    : discogsData?.released
+      ? discogsData.released
+      : '';
+
   const result: AnalysisResult = {
     id: `scan-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
     artist: validated.artist,
@@ -287,15 +301,19 @@ export async function analyzeImages(
     name: composeDisplayName(validated.artist, validated.albumName, validated.pressingName),
     origin: normalizeOrigin(validated.origin),
     year: validated.year,
-    estimatedValue: validated.estimatedValue || 0,
-    ...(validated.estimatedValueLow != null && validated.estimatedValueLow > 0 && { estimatedValueLow: validated.estimatedValueLow }),
-    ...(validated.estimatedValueHigh != null && validated.estimatedValueHigh > 0 && { estimatedValueHigh: validated.estimatedValueHigh }),
+    estimatedValue: baseValue,
+    ...(baseLow != null && { estimatedValueLow: baseLow }),
+    ...(baseHigh != null && { estimatedValueHigh: baseHigh }),
+    baseEstimatedValue: baseValue,
+    ...(baseLow != null && { baseEstimatedValueLow: baseLow }),
+    ...(baseHigh != null && { baseEstimatedValueHigh: baseHigh }),
     confidence: Math.min(100, Math.max(0, Math.round(validated.confidence || 0))),
     description: validated.description,
     ...(validated.rarity && { rarity: validated.rarity }),
     ...(validated.label && { label: validated.label }),
     ...(validated.genre && { genre: validated.genre }),
     ...(validated.condition && { condition: validated.condition }),
+    ...(originalReleaseDate && { originalReleaseDate }),
     ...(validated.vibePairing && { vibePairing: validated.vibePairing }),
     ...(validated.foodPairing && { foodPairing: validated.foodPairing }),
     ...(validated.drinkPairing && { drinkPairing: validated.drinkPairing }),
@@ -343,6 +361,14 @@ export async function analyzeImages(
       result.albumName = discogsData.title;
     }
     result.name = composeDisplayName(result.artist, result.albumName, result.pressingName);
+  }
+
+  // Apply condition-based price adjustment when AI returns non-VG+ condition (including Uncertain for ±50% range)
+  if (result.condition && result.condition !== 'Very Good Plus (VG+)') {
+    const adjusted = applyConditionPricing(result.baseEstimatedValue!, result.condition);
+    result.estimatedValue = adjusted.estimatedValue;
+    result.estimatedValueLow = adjusted.estimatedValueLow;
+    result.estimatedValueHigh = adjusted.estimatedValueHigh;
   }
 
   console.log('[Gemini] ✅ Analysis complete:', {

@@ -10,11 +10,12 @@ interface Props {
   subtitle?: string;
   items: CarouselItem[];
   onSeeAll?: () => void;
+  onItemPress?: (item: CarouselItem) => void;
 }
 
-export function HorizontalCarousel({ title, subtitle, items, onSeeAll }: Props) {
+export function HorizontalCarousel({ title, subtitle, items, onSeeAll, onItemPress }: Props) {
   const renderItem = ({ item, index }: { item: CarouselItem; index: number }) => (
-    <TouchableOpacity style={styles.card} activeOpacity={0.8}>
+    <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => onItemPress?.(item)}>
       <View style={styles.cardImage}>
         <Image
           source={item.image || { uri: `https://picsum.photos/seed/${item.id || index}/280/280` }}
